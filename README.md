@@ -96,4 +96,4 @@ git push origin skill/your-skill-name
 ## Repo Setup
 
 This repo is hosted at https://github.com/WillGitItDone/agent-skills.
-Until the Bitbucket repo is created, it works as a local git repo.
+Until the Bitbucket repo is created, we will just use this git repo.
