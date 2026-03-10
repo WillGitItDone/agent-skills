@@ -9,6 +9,7 @@ Shared skill library for Copilot CLI users at Engrain.
 | [jira-ticket](skills/jira-ticket/) | Write Jira tickets for Engrain using the 6-section template with colored panels | 1.1.0 |
 | [qa-review](skills/qa-review/) | QA review PRs — extracts Jira ticket, diffs branch, produces structured report | 1.1.0 |
 | [skill-share](skills/skill-share/) | Browse, install, update, and publish skills from this repo | 2.0.0 |
+| [build-integration](skills/build-integration/) | Build new PMS integrations — smctl client, command, tests, atlas container & deployment | 1.0.0 |
 
 ## Skill Details
 
@@ -44,6 +45,17 @@ share/publish a skill.
 
 **Requirements:**
 - CLI tools: `git`
+
+### build-integration
+
+Build new PMS integrations for Engrain. Covers the full lifecycle: smctl client,
+smctl command, tests, atlas container, and atlas deployment. Use this when asked
+to build, scaffold, or plan a new integration with a Property Management System.
+
+**Requirements:**
+- Environment variables: `SIGHTMAP_API_KEY`
+- CLI tools: `git`, `deno`, `docker`
+- MCP tools: `mcp-atlassian-jira_get_issue`
 
 ## Quick Start
 
