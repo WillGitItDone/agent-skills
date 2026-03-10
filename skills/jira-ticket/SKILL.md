@@ -5,6 +5,19 @@ description: >
   draft, or create a Jira story, epic, or bug. Loads Engrain context, applies the
   6-section template with correct Jira formatting (blue/green panels), calibrates
   tone from examples, and creates or updates the ticket via MCP.
+version: 1.1.0
+requires:
+  env:
+    - JIRA_API_TOKEN
+    - JIRA_URL
+    - JIRA_USERNAME
+  tools:
+    - mcp-atlassian-jira_create_issue
+    - mcp-atlassian-jira_update_issue
+    - mcp-atlassian-jira_get_issue
+    - mcp-atlassian-jira_search
+  bins:
+    - python3
 ---
 
 # Jira Ticket Skill

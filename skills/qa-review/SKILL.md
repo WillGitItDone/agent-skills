@@ -5,6 +5,16 @@ description: >
   a feature branch or PR. Extracts the Jira ticket from commit messages, fetches
   ticket details via mcp-atlassian, diffs the branch against its target, and produces
   a structured QA report checking scope, code quality, conventions, and test coverage.
+version: 1.1.0
+requires:
+  env:
+    - JIRA_API_TOKEN
+    - JIRA_URL
+    - JIRA_USERNAME
+  tools:
+    - mcp-atlassian-jira_get_issue
+  bins:
+    - git
 ---
 
 # QA Review Skill

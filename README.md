@@ -2,86 +2,114 @@
 
 Shared skill library for Copilot CLI users at Engrain.
 
-## What Are Skills?
-
-Skills are instruction files that teach the Copilot CLI agent how to perform specific
-tasks. Each skill is a folder in `~/.copilot/skills/` containing a `SKILL.md` file
-(and optional supporting files). When invoked, the agent follows the skill's instructions
-to complete a task.
-
 ## Available Skills
 
-| Skill | Description |
-|-------|-------------|
-| [jira-ticket](skills/jira-ticket/) | Write Jira tickets for Engrain using the 6-section template with colored panels |
-| [qa-review](skills/qa-review/) | QA review PRs — extracts Jira ticket, diffs branch, produces structured report |
-| [skill-share](skills/skill-share/) | Browse, install, update, and publish skills from this repo |
+| Skill | Description | Version |
+|-------|-------------|---------|
+| [jira-ticket](skills/jira-ticket/) | Write Jira tickets for Engrain using the 6-section template with colored panels | 1.1.0 |
+| [qa-review](skills/qa-review/) | QA review PRs — extracts Jira ticket, diffs branch, produces structured report | 1.1.0 |
+| [skill-share](skills/skill-share/) | Browse, install, update, and publish skills from this repo | 2.0.0 |
+
+## Skill Details
+
+### jira-ticket
+
+Write Jira tickets for the SightMap team at Engrain. Use this when asked to write,
+draft, or create a Jira story, epic, or bug. Loads Engrain context, applies the
+6-section template with correct Jira formatting (blue/green panels), calibrates
+tone from examples, and creates or updates the ticket via MCP.
+
+**Requirements:**
+- Environment variables: `JIRA_API_TOKEN`, `JIRA_URL`, `JIRA_USERNAME`
+- CLI tools: `python3`
+- MCP tools: `mcp-atlassian-jira_create_issue`, `mcp-atlassian-jira_update_issue`, `mcp-atlassian-jira_get_issue`, `mcp-atlassian-jira_search`
+
+### qa-review
+
+QA review skill for Engrain PRs. Use this when asked to QA, review, or validate
+a feature branch or PR. Extracts the Jira ticket from commit messages, fetches
+ticket details via mcp-atlassian, diffs the branch against its target, and produces
+a structured QA report checking scope, code quality, conventions, and test coverage.
+
+**Requirements:**
+- Environment variables: `JIRA_API_TOKEN`, `JIRA_URL`, `JIRA_USERNAME`
+- CLI tools: `git`
+- MCP tools: `mcp-atlassian-jira_get_issue`
+
+### skill-share
+
+Browse, install, update, and publish Copilot CLI skills from the shared agent-skills
+repo. Use this when asked to list skills, install a skill, update skills, or
+share/publish a skill.
+
+**Requirements:**
+- CLI tools: `git`
 
 ## Quick Start
 
-### Install the skill-share skill (one-time setup)
+### Install the skill-share skill (one-time bootstrap)
 
 ```bash
-# Clone this repo
 git clone https://github.com/WillGitItDone/agent-skills.git ~/.copilot/skill-cache/agent-skills
-
-# Install the skill-share skill
 cp -R ~/.copilot/skill-cache/agent-skills/skills/skill-share ~/.copilot/skills/skill-share
 ```
 
-Then restart your Copilot CLI session. You'll see `skill-share` in your `/skills` menu.
+Then restart your Copilot CLI session. You'll see `skill-share` in `/skills`.
 
-### Use skill-share to install other skills
-
-Once `skill-share` is installed, just ask Copilot:
+### Use skill-share to manage skills
 
 - *"List available skills"*
 - *"Install the jira-ticket skill"*
 - *"Update all my skills"*
-- *"Publish my custom skill to the repo"*
+- *"Setup credentials"*
 
-### Manual install (no skill-share)
+## Credential Management
+
+Skills that need API tokens expect environment variables. Store credentials in
+`~/.copilot/credentials.env` (not in `.zshrc`):
 
 ```bash
-# Clone if you haven't already
-git clone https://github.com/WillGitItDone/agent-skills.git ~/.copilot/skill-cache/agent-skills
+# Create the file
+touch ~/.copilot/credentials.env
+chmod 600 ~/.copilot/credentials.env
 
-# Copy any skill to your local skills directory
-cp -R ~/.copilot/skill-cache/agent-skills/skills/jira-ticket ~/.copilot/skills/jira-ticket
-cp -R ~/.copilot/skill-cache/agent-skills/skills/qa-review ~/.copilot/skills/qa-review
+# Add to .zshrc (one time)
+echo '[ -f ~/.copilot/credentials.env ] && source ~/.copilot/credentials.env' >> ~/.zshrc
 ```
 
-## Contributing a Skill
+Then edit `~/.copilot/credentials.env` with your tokens. Run "setup credentials"
+in the skill-share skill for guided setup.
 
-### Skill structure
+## SKILL.md Frontmatter Spec
 
-```
-skills/your-skill-name/
-├── SKILL.md              # Required — front matter (name, description) + instructions
-├── supporting-file.md    # Optional — templates, reference docs, etc.
-└── another-file.md       # Optional
-```
-
-### SKILL.md front matter
-
-Every skill must start with YAML front matter:
+Every skill must have a `SKILL.md` with YAML frontmatter:
 
 ```yaml
 ---
-name: your-skill-name
-description: >
-  One-paragraph description of what the skill does and when to use it.
+name: my-skill            # required — lowercase kebab-case
+description: >            # required — one-line summary for catalog
+  What this skill does.
+version: 1.0.0            # required — semver, bump on meaningful changes
+requires:                  # optional — runtime dependencies
+  env:                     # env vars the skill needs
+    - MY_API_TOKEN
+  tools:                   # MCP tools the skill invokes
+    - mcp-server-tool_name
+  bins:                    # CLI binaries needed
+    - git
 ---
 ```
 
-### Publishing via skill-share
+## Publishing Skills
 
-If you have the `skill-share` skill installed, just ask Copilot:
-*"Publish my-skill-name to the skills repo"*
+To share a skill you've created:
 
-It will create a branch, commit your skill, push, and guide you through the PR.
+1. Create a `SKILL.md` with valid frontmatter (name, description, version, requires)
+2. Tell Copilot: "publish my-skill-name"
+3. The skill-share skill will scan for credentials, update this README, and push a branch
+4. Open a PR for review
 
-### Publishing manually
+### Manual publishing
 
 ```bash
 cd ~/.copilot/skill-cache/agent-skills
@@ -90,10 +118,8 @@ cp -R ~/.copilot/skills/your-skill-name skills/
 git add skills/your-skill-name
 git commit -m ":art: Add your-skill-name skill."
 git push origin skill/your-skill-name
-# Then create a PR in Bitbucket
 ```
 
-## Repo Setup
+---
 
-This repo is hosted at https://github.com/WillGitItDone/agent-skills.
-Until the Bitbucket repo is created, we will just use this git repo.
+*This README is auto-generated by the skill-share skill. Do not edit manually.*
