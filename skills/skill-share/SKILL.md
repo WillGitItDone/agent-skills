@@ -4,7 +4,7 @@ description: >
   Browse, install, update, and publish Copilot CLI skills from the shared
   agent-skills repo. Use this when asked to list skills, install a skill,
   update skills, or share/publish a skill.
-version: 2.0.0
+version: 2.1.0
 requires:
   bins:
     - git
@@ -109,10 +109,15 @@ The user will ask you to do one of these things. Determine intent from their mes
 
 6. **Run dependency checks** (see Dependency Checks section below).
 
-7. Tell the user:
+7. **Update the workspace skill table** (see Workspace Sync section below).
+
+8. Tell the user:
    > ✅ Installed **{name}** to `~/.copilot/skills/{name}/`.
    > Restart your Copilot CLI session (or start a new one) for the skill to appear
    > in `/skills`.
+   >
+   > 💡 To add personal customizations (product-specific details, team conventions),
+   > create `~/.copilot/skills/{name}/local.md`. It won't be overwritten by updates.
 
    Include any dependency warnings from step 6.
 
@@ -129,23 +134,34 @@ The user will ask you to do one of these things. Determine intent from their mes
 
 3. For each skill to update:
    a. Check if it exists in both the repo and `~/.copilot/skills/`.
-   b. Compare with `diff -rq` (exclude `.DS_Store`).
-   c. If differences found, copy the repo version over the installed version:
+   b. Compare SKILL.md only (not local.md) with `diff -q` (exclude `.DS_Store`).
       ```bash
+      diff -q ~/.copilot/skill-cache/agent-skills/skills/{name}/SKILL.md ~/.copilot/skills/{name}/SKILL.md
+      ```
+   c. If differences found, **preserve local.md** and replace only shared files:
+      ```bash
+      # Back up local.md if it exists
+      [ -f ~/.copilot/skills/{name}/local.md ] && cp ~/.copilot/skills/{name}/local.md /tmp/_skill_local_backup.md
+      # Replace with repo version
       rm -rf ~/.copilot/skills/{name}
       cp -R ~/.copilot/skill-cache/agent-skills/skills/{name} ~/.copilot/skills/{name}
+      # Restore local.md
+      [ -f /tmp/_skill_local_backup.md ] && mv /tmp/_skill_local_backup.md ~/.copilot/skills/{name}/local.md
       ```
 
 4. **Run dependency checks** on each updated skill (see Dependency Checks section).
 
-5. Report results:
+5. **Update the workspace skill table** (see Workspace Sync section below).
+
+6. Report results:
    - List skills that were updated (include version numbers)
    - List skills that were already up to date
+   - For skills with a `local.md`, confirm it was preserved
    - If any installed skills are NOT in the repo (custom/local-only), note them
      as "local only — not in repo"
    - Include any dependency warnings
 
-6. Tell the user to restart their session if any skills were updated.
+7. Tell the user to restart their session if any skills were updated.
 
 ---
 
@@ -172,7 +188,7 @@ The user will ask you to do one of these things. Determine intent from their mes
      to update it with your local version?"
    - If no, proceed.
 
-6. Copy skill files to repo cache:
+6. Copy skill files to repo cache, **excluding local.md**:
    ```bash
    cd ~/.copilot/skill-cache/agent-skills
    git checkout main
@@ -180,6 +196,8 @@ The user will ask you to do one of these things. Determine intent from their mes
    git checkout -b skill/{name}
    rm -rf skills/{name}
    cp -R ~/.copilot/skills/{name} skills/{name}
+   # Never publish local.md — it contains personal customizations
+   rm -f skills/{name}/local.md
    ```
 
 7. **Regenerate the README** (see README Generation section below).
@@ -211,7 +229,9 @@ The user will ask you to do one of these things. Determine intent from their mes
     > git push origin skill/{name}
     > ```
 
-12. Return to main branch:
+12. **Update the workspace skill table** (see Workspace Sync section below).
+
+13. Return to main branch:
     ```bash
     cd ~/.copilot/skill-cache/agent-skills && git checkout main
     ```
@@ -528,9 +548,141 @@ skill files to `~/.copilot/skills/{name}/`.
 - **Frontmatter missing `version`:** During List/Install, treat as `0.0.0` and
   note that the skill should add a version field. During Publish, require it.
 
+---
+
+## Workspace Sync
+
+This section is used by **Install**, **Update**, and **Publish** commands. Run it
+after skills change on disk to keep the workspace instructions accurate.
+
+### Purpose
+
+The file `.github/copilot-instructions.md` in the Pillar workspace contains an
+"Available Skills" table under the "## Skill Usage" section. This table must stay
+in sync with whatever skills are actually installed so that Copilot knows when to
+invoke each skill.
+
+### Process
+
+1. **Find the workspace instructions file.** Look for `.github/copilot-instructions.md`
+   in the current working directory or its parents (up to the git root). If not found,
+   skip this section silently.
+
+2. **Read installed skills.** For each directory in `~/.copilot/skills/*/`, read the
+   SKILL.md frontmatter to extract `name` and `description`.
+
+3. **Build a "When to Use" summary** for each skill. Derive it from the `description`
+   field — condense to a short phrase (e.g., "Writing Jira stories, epics, or bugs").
+
+4. **Regenerate the table.** Find the section between `### Available Skills` and the
+   next `---` or `##` heading. Replace it with:
+
+   ```markdown
+   ### Available Skills
+
+   | Skill | When to Use |
+   |-------|-------------|
+   | `{name}` | {when_to_use} |
+   ```
+
+   Sort alphabetically by skill name.
+
+5. **Write the updated file.** Use the edit tool to replace just the table block.
+   Do not touch any other part of the instructions file.
+
+### Example
+
+If installed skills are `build-integration`, `jira-ticket`, `qa-review`, and
+`skill-share`, the table should be:
+
+```markdown
+### Available Skills
+
+| Skill | When to Use |
+|-------|-------------|
+| `build-integration` | Building a new PMS integration end-to-end |
+| `jira-ticket` | Writing Jira stories, epics, or bugs |
+| `qa-review` | QA reviewing a feature branch or PR |
+| `skill-share` | Publishing, installing, or updating skills |
+```
+
+---
+
+## Local Overrides (local.md)
+
+Skills support a layered override system so users can personalize shared skills
+without losing customizations on update.
+
+### How It Works
+
+Each installed skill can have two files:
+
+| File | Source | Updated by `update`? | Published by `publish`? |
+|------|--------|---------------------|------------------------|
+| `SKILL.md` | Shared repo | ✅ Yes — replaced on update | ✅ Yes |
+| `local.md` | User-created | ❌ Never touched | ❌ Never published |
+
+When Copilot loads a skill, it reads **both files**. Instructions in `local.md`
+take precedence over `SKILL.md` for any conflicting guidance.
+
+### What Goes in local.md
+
+Personal or product-specific customizations:
+
+- **Product context** — "My product is Atlas (customer portal). Focus on React 18
+  with Ant Design 5 and Redux Toolkit patterns."
+- **Team conventions** — "Our team uses `ATLAS-` Jira prefix. Default assignee is
+  `jane.doe@engrain.com`."
+- **API specifics** — "Our Yardi RentCafe endpoint uses `https://api.rentcafe.com/
+  rentcafeapi.aspx` with property code `p1234567`."
+- **Workflow tweaks** — "Skip the unit amenities step for our integrations, we
+  don't use descriptions."
+- **Custom CSV columns** — "Our asset CSV has an extra `region` column used for
+  grouping deployments."
+
+### Creating local.md
+
+Users create it manually. No special format required — it's free-form markdown
+that Copilot reads as additional context:
+
+```bash
+# Example: personalize the build-integration skill
+cat > ~/.copilot/skills/build-integration/local.md << 'EOF'
+# Local Overrides
+
+## My Product
+I work on Atlas (customer portal) — `clients/customer/` in app-sightmap.
+
+## Team Conventions
+- Jira project: ATLAS
+- Default reviewer: @jane.doe
+- Our integrations always include expenses (not just pricing)
+
+## API Keys
+Use the staging SightMap API key from credentials.env (SIGHTMAP_STAGING_KEY).
+EOF
+```
+
+### Rules for Skill Authors
+
+When writing a SKILL.md for the shared repo:
+
+1. **Don't put personal details in SKILL.md.** Keep it generic — use `<PROVIDER>`,
+   `{name}`, and placeholder values.
+2. **Mention local.md in your skill.** Add a note like:
+   > 💡 Check for `local.md` in this skill's directory for product-specific
+   > overrides before starting.
+3. **Design for extensibility.** Structure your SKILL.md so that local.md can
+   override specific sections without conflicting (e.g., use clear section
+   headings that local.md can reference).
+
+---
+
 ## Important Notes
 
 - **Never delete a user's local skill** without explicit confirmation.
+- **Never touch local.md.** Install, update, and publish must all preserve or
+  exclude `local.md`. This is the user's personal customization file.
 - **Always pull before any operation** to avoid working with stale data.
 - **Restart required:** After install/update, skills only appear after restarting
   the Copilot CLI session.

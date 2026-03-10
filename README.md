@@ -6,11 +6,23 @@ Shared skill library for Copilot CLI users at Engrain.
 
 | Skill | Description | Version |
 |-------|-------------|---------|
+| [build-integration](skills/build-integration/) | Build new PMS integrations — smctl client, command, tests, atlas container & deployment | 1.0.0 |
 | [jira-ticket](skills/jira-ticket/) | Write Jira tickets for Engrain using the 6-section template with colored panels | 1.1.0 |
 | [qa-review](skills/qa-review/) | QA review PRs — extracts Jira ticket, diffs branch, produces structured report | 1.1.0 |
-| [skill-share](skills/skill-share/) | Browse, install, update, and publish skills from this repo | 2.0.0 |
+| [skill-share](skills/skill-share/) | Browse, install, update, and publish skills from this repo | 2.1.0 |
 
 ## Skill Details
+
+### build-integration
+
+Build new PMS integrations for Engrain. Covers the full lifecycle: smctl client,
+smctl command, tests, atlas container, and atlas deployment. Use this when asked
+to build, scaffold, or plan a new integration with a Property Management System.
+
+**Requirements:**
+- Environment variables: `SIGHTMAP_API_KEY`
+- CLI tools: `git`, `deno`, `docker`
+- MCP tools: `mcp-atlassian-jira_get_issue`
 
 ### jira-ticket
 
@@ -40,7 +52,7 @@ a structured QA report checking scope, code quality, conventions, and test cover
 
 Browse, install, update, and publish Copilot CLI skills from the shared agent-skills
 repo. Use this when asked to list skills, install a skill, update skills, or
-share/publish a skill.
+share/publish a skill. Now with local override support.
 
 **Requirements:**
 - CLI tools: `git`
@@ -62,6 +74,42 @@ Then restart your Copilot CLI session. You'll see `skill-share` in `/skills`.
 - *"Install the jira-ticket skill"*
 - *"Update all my skills"*
 - *"Setup credentials"*
+
+## Personalizing Skills (local.md)
+
+Skills support a **layered override** system. Each installed skill has:
+
+| File | Purpose | Updated by `update`? | Published? |
+|------|---------|---------------------|-----------|
+| `SKILL.md` | Shared instructions from this repo | ✅ Yes | ✅ Yes |
+| `local.md` | Your personal customizations | ❌ Never | ❌ Never |
+
+When Copilot loads a skill, it reads **both files**. `local.md` takes precedence.
+
+### Create a local.md
+
+```bash
+cat > ~/.copilot/skills/build-integration/local.md << 'EOF'
+# Local Overrides
+
+## My Product
+I work on Atlas (customer portal) — `clients/customer/` in app-sightmap.
+
+## Team Conventions
+- Jira project: ATLAS
+- Our integrations always include expenses (not just pricing)
+EOF
+```
+
+Now `update all` will refresh `SKILL.md` from the repo while leaving your
+`local.md` untouched. Your customizations survive every update.
+
+### What goes in local.md
+
+- Product/team context (which app you work on, Jira project prefix)
+- API specifics (endpoints, property codes, custom CSV columns)
+- Workflow tweaks (skip steps, change defaults, add team conventions)
+- Anything personal that shouldn't be shared with the whole team
 
 ## Credential Management
 
@@ -109,12 +157,16 @@ To share a skill you've created:
 3. The skill-share skill will scan for credentials, update this README, and push a branch
 4. Open a PR for review
 
+> **Note:** `local.md` is never published — only `SKILL.md` and other shared files
+> are included in the PR.
+
 ### Manual publishing
 
 ```bash
 cd ~/.copilot/skill-cache/agent-skills
 git checkout -b skill/your-skill-name
 cp -R ~/.copilot/skills/your-skill-name skills/
+rm -f skills/your-skill-name/local.md  # never publish personal overrides
 git add skills/your-skill-name
 git commit -m ":art: Add your-skill-name skill."
 git push origin skill/your-skill-name
