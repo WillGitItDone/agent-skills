@@ -6,18 +6,22 @@ Shared skill library for Copilot CLI users at Engrain.
 
 | Skill | Description | Version |
 |-------|-------------|---------|
-| [build-integration](skills/build-integration/) | Build new PMS integrations — smctl client, command, tests, atlas container & deployment | 1.0.0 |
-| [jira-ticket](skills/jira-ticket/) | Write Jira tickets for Engrain using the 6-section template with colored panels | 1.1.0 |
-| [qa-review](skills/qa-review/) | QA review PRs — extracts Jira ticket, diffs branch, produces structured report | 1.1.0 |
-| [skill-share](skills/skill-share/) | Browse, install, update, and publish skills from this repo | 2.1.0 |
+| [api-data-fetch](skills/api-data-fetch/) | Bulk-fetch data from SightMap or UnitMap APIs for a list of Engrain asset IDs. Walks the user through selecting an API, resource group, and GET endpoint, then makes sequential API calls and compiles all response data into a single CSV. GET-only — no POST, PUT, DELETE, or PATCH calls are ever made. | 1.0.0 |
+| [build-integration](skills/build-integration/) | Build new PMS integrations for Engrain. Covers the full lifecycle: smctl client, smctl command, tests, atlas container, and atlas deployment. | 1.0.0 |
+| [jira-ticket](skills/jira-ticket/) | Write Jira tickets for the SightMap team at Engrain. Use this when asked to write, draft, or create a Jira story, epic, or bug. | 1.1.0 |
+| [qa-review](skills/qa-review/) | QA review skill for Engrain PRs. Use this when asked to QA, review, or validate a feature branch or PR. | 1.1.0 |
+| [release-notes](skills/release-notes/) | Release Notes skill for Engrain. Use this when asked to write, generate, or draft a release note (internal or external). | — |
+| [skill-share](skills/skill-share/) | Browse, install, update, and publish Copilot CLI skills from the shared agent-skills repo. | 2.1.0 |
 
 ## Skill Details
 
+### api-data-fetch
+
+Bulk-fetch data from SightMap or UnitMap APIs for a list of Engrain asset IDs. Walks the user through selecting an API, resource group, and GET endpoint, then makes sequential API calls and compiles all response data into a single CSV. GET-only — no POST, PUT, DELETE, or PATCH calls are ever made.
+
 ### build-integration
 
-Build new PMS integrations for Engrain. Covers the full lifecycle: smctl client,
-smctl command, tests, atlas container, and atlas deployment. Use this when asked
-to build, scaffold, or plan a new integration with a Property Management System.
+Build new PMS integrations for Engrain. Covers the full lifecycle: smctl client, smctl command, tests, atlas container, and atlas deployment.
 
 **Requirements:**
 - Environment variables: `SIGHTMAP_API_KEY`
@@ -26,10 +30,7 @@ to build, scaffold, or plan a new integration with a Property Management System.
 
 ### jira-ticket
 
-Write Jira tickets for the SightMap team at Engrain. Use this when asked to write,
-draft, or create a Jira story, epic, or bug. Loads Engrain context, applies the
-6-section template with correct Jira formatting (blue/green panels), calibrates
-tone from examples, and creates or updates the ticket via MCP.
+Write Jira tickets for the SightMap team at Engrain. Use this when asked to write, draft, or create a Jira story, epic, or bug. Loads Engrain context, applies the 6-section template with correct Jira formatting, calibrates tone from examples, and creates or updates the ticket via MCP.
 
 **Requirements:**
 - Environment variables: `JIRA_API_TOKEN`, `JIRA_URL`, `JIRA_USERNAME`
@@ -38,21 +39,20 @@ tone from examples, and creates or updates the ticket via MCP.
 
 ### qa-review
 
-QA review skill for Engrain PRs. Use this when asked to QA, review, or validate
-a feature branch or PR. Extracts the Jira ticket from commit messages, fetches
-ticket details via mcp-atlassian, diffs the branch against its target, and produces
-a structured QA report checking scope, code quality, conventions, and test coverage.
+QA review skill for Engrain PRs. Use this when asked to QA, review, or validate a feature branch or PR. Extracts the Jira ticket from commit messages, fetches ticket details via mcp-atlassian, diffs the branch against its target, and produces a structured QA report.
 
 **Requirements:**
 - Environment variables: `JIRA_API_TOKEN`, `JIRA_URL`, `JIRA_USERNAME`
 - CLI tools: `git`
 - MCP tools: `mcp-atlassian-jira_get_issue`
 
+### release-notes
+
+Release Notes skill for Engrain. Use this when asked to write, generate, or draft a release note (internal or external). Accepts a Jira ticket key, fetches ticket details, determines the note type, and produces a formatted internal release note using the appropriate LaunchNotes template.
+
 ### skill-share
 
-Browse, install, update, and publish Copilot CLI skills from the shared agent-skills
-repo. Use this when asked to list skills, install a skill, update skills, or
-share/publish a skill. Now with local override support.
+Browse, install, update, and publish Copilot CLI skills from the shared agent-skills repo. Use this when asked to list skills, install a skill, update skills, or share/publish a skill.
 
 **Requirements:**
 - CLI tools: `git`
@@ -75,42 +75,6 @@ Then restart your Copilot CLI session. You'll see `skill-share` in `/skills`.
 - *"Update all my skills"*
 - *"Setup credentials"*
 
-## Personalizing Skills (local.md)
-
-Skills support a **layered override** system. Each installed skill has:
-
-| File | Purpose | Updated by `update`? | Published? |
-|------|---------|---------------------|-----------|
-| `SKILL.md` | Shared instructions from this repo | ✅ Yes | ✅ Yes |
-| `local.md` | Your personal customizations | ❌ Never | ❌ Never |
-
-When Copilot loads a skill, it reads **both files**. `local.md` takes precedence.
-
-### Create a local.md
-
-```bash
-cat > ~/.copilot/skills/build-integration/local.md << 'EOF'
-# Local Overrides
-
-## My Product
-I work on Atlas (customer portal) — `clients/customer/` in app-sightmap.
-
-## Team Conventions
-- Jira project: ATLAS
-- Our integrations always include expenses (not just pricing)
-EOF
-```
-
-Now `update all` will refresh `SKILL.md` from the repo while leaving your
-`local.md` untouched. Your customizations survive every update.
-
-### What goes in local.md
-
-- Product/team context (which app you work on, Jira project prefix)
-- API specifics (endpoints, property codes, custom CSV columns)
-- Workflow tweaks (skip steps, change defaults, add team conventions)
-- Anything personal that shouldn't be shared with the whole team
-
 ## Credential Management
 
 Skills that need API tokens expect environment variables. Store credentials in
@@ -128,26 +92,6 @@ echo '[ -f ~/.copilot/credentials.env ] && source ~/.copilot/credentials.env' >>
 Then edit `~/.copilot/credentials.env` with your tokens. Run "setup credentials"
 in the skill-share skill for guided setup.
 
-## SKILL.md Frontmatter Spec
-
-Every skill must have a `SKILL.md` with YAML frontmatter:
-
-```yaml
----
-name: my-skill            # required — lowercase kebab-case
-description: >            # required — one-line summary for catalog
-  What this skill does.
-version: 1.0.0            # required — semver, bump on meaningful changes
-requires:                  # optional — runtime dependencies
-  env:                     # env vars the skill needs
-    - MY_API_TOKEN
-  tools:                   # MCP tools the skill invokes
-    - mcp-server-tool_name
-  bins:                    # CLI binaries needed
-    - git
----
-```
-
 ## Publishing Skills
 
 To share a skill you've created:
@@ -156,21 +100,6 @@ To share a skill you've created:
 2. Tell Copilot: "publish my-skill-name"
 3. The skill-share skill will scan for credentials, update this README, and push a branch
 4. Open a PR for review
-
-> **Note:** `local.md` is never published — only `SKILL.md` and other shared files
-> are included in the PR.
-
-### Manual publishing
-
-```bash
-cd ~/.copilot/skill-cache/agent-skills
-git checkout -b skill/your-skill-name
-cp -R ~/.copilot/skills/your-skill-name skills/
-rm -f skills/your-skill-name/local.md  # never publish personal overrides
-git add skills/your-skill-name
-git commit -m ":art: Add your-skill-name skill."
-git push origin skill/your-skill-name
-```
 
 ---
 
