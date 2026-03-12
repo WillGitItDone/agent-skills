@@ -5,7 +5,7 @@ description: >
   Walks the user through selecting an API, resource group, and GET endpoint,
   then makes sequential API calls and compiles all response data into a single CSV.
   GET-only — no POST, PUT, DELETE, or PATCH calls are ever made.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # API Data Fetch Skill
@@ -26,6 +26,9 @@ single CSV that the user can use for data analysis and decision-making.
 If this is the first time using this skill, the user needs an API key:
 
 1. Get a SightMap API key from a team lead or the Engrain admin portal.
+   **⚠️ Use a key that is provisioned for read (GET) access only.** This skill
+   never makes write requests, so a read-only key is the safest option — it
+   eliminates any risk of accidental data modification.
 2. Create the credentials file:
 ```bash
 echo 'SIGHTMAP_API_KEY=<your-key-here>' > ~/.copilot/credentials.env
@@ -158,9 +161,13 @@ curl -s -o /dev/null -w "%{http_code}" "https://api.sightmap.com/v1/assets" \
   -H "API-Key: $SIGHTMAP_API_KEY"
 ```
 
-- If this returns `401`, stop immediately and tell the user their API key is
-  invalid or expired. Point them to the First-Time Setup section.
-- If this returns `200`, proceed to Step 5.
+- **`401`:** Stop immediately — the API key is invalid or expired. Point them
+  to the First-Time Setup section.
+- **`403`:** Stop — the key lacks permissions for this API. The user may need a
+  different key or elevated access. Do not proceed to batch fetching.
+- **`5xx`:** Stop — the API is having server issues. Ask the user to try again later.
+- **Any other non-`200` response:** Stop and show the status code. Do not proceed.
+- **`200`:** Proceed to Step 5.
 
 ### Step 5: Make the API Calls
 
@@ -255,8 +262,9 @@ All assets, all pages — everything goes into one file.
 
 **Save the file to:**
 ```
-./projects/api-data/{endpoint_name}_{YYYY-MM-DD}.csv
+./projects/api-data/{resource}_{endpoint}_{YYYY-MM-DD}.csv
 ```
+(e.g., `units_list_2026-03-12.csv`, `asset_expenses_2026-03-12.csv`)
 (Relative to the workspace root — works for any team member's machine.)
 
 Create the `projects/api-data/` directory if it doesn't exist.
@@ -299,6 +307,7 @@ MAX_RETRIES = 3            # max retries per request
 
 all_records = []
 errors = []
+consecutive_403 = 0
 
 for i, asset_id in enumerate(ASSET_IDS):
     print(f"[{i+1}/{len(ASSET_IDS)}] Fetching asset {asset_id}...")
@@ -307,7 +316,7 @@ for i, asset_id in enumerate(ASSET_IDS):
         url = f"{BASE_URL}{ENDPOINT.replace('{asset}', str(asset_id))}?page={page}&per-page=10000"
         retries = 0
         data = None
-        while retries <= MAX_RETRIES:
+        while retries < MAX_RETRIES:
             try:
                 req = urllib.request.Request(url, headers=HEADERS)
                 with urllib.request.urlopen(req) as resp:
@@ -316,6 +325,10 @@ for i, asset_id in enumerate(ASSET_IDS):
             except urllib.error.HTTPError as e:
                 if e.code == 429:
                     retries += 1
+                    if retries >= MAX_RETRIES:
+                        errors.append({"asset_id": asset_id, "error": "rate_limited_max_retries"})
+                        data = None
+                        break
                     print(f"  Rate limited, waiting {WAIT_ON_429}s (retry {retries}/{MAX_RETRIES})")
                     time.sleep(WAIT_ON_429)
                 elif e.code == 404:
@@ -327,6 +340,10 @@ for i, asset_id in enumerate(ASSET_IDS):
                     sys.exit(1)
                 elif e.code == 403:
                     errors.append({"asset_id": asset_id, "error": "forbidden"})
+                    consecutive_403 += 1
+                    if consecutive_403 >= 3:
+                        print(f"ERROR: 3 consecutive 403s. Key may lack permissions. Stopping.")
+                        sys.exit(1)
                     data = None
                     break
                 else:
@@ -335,8 +352,12 @@ for i, asset_id in enumerate(ASSET_IDS):
                     break
         if data is None:
             break
+        consecutive_403 = 0  # reset on any successful fetch
         # Extract the data list — key name varies by endpoint
-        data_key = [k for k in data.keys() if k not in ("paging", "meta")][0]
+        data_keys = [k for k in data.keys() if k not in ("paging", "meta")]
+        if not data_keys:
+            break  # response had no data payload — skip
+        data_key = data_keys[0]
         records = data.get(data_key, [])
         if isinstance(records, dict):
             records = [records]

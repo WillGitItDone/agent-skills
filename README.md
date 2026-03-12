@@ -19,6 +19,11 @@ Shared skill library for Copilot CLI users at Engrain.
 
 Bulk-fetch data from SightMap or UnitMap APIs for a list of Engrain asset IDs. Walks the user through selecting an API, resource group, and GET endpoint, then makes sequential API calls and compiles all response data into a single CSV. GET-only — no POST, PUT, DELETE, or PATCH calls are ever made.
 
+> **🔒 Safety:** This skill is strictly read-only. It only makes `GET` requests
+> and will never create, update, or delete any data. For maximum safety, provision
+> an API key with **read-only (GET) permissions only** — this eliminates any risk
+> of accidental data modification, even if instructions are misinterpreted.
+
 ### build-integration
 
 Build new PMS integrations for Engrain. Covers the full lifecycle: smctl client, smctl command, tests, atlas container, and atlas deployment.
