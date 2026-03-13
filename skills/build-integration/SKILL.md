@@ -4,7 +4,7 @@ description: >
   Build new PMS integrations for Engrain. Covers the full lifecycle: smctl client,
   smctl command, tests, atlas container, and atlas deployment. Use this when asked
   to build, scaffold, or plan a new integration with a Property Management System.
-version: 1.0.0
+version: 1.1.0
 requires:
   env:
     - SIGHTMAP_API_KEY
@@ -165,6 +165,18 @@ PMS APIs vary in how they expose data. The client must adapt:
 - **Availability filtering** — Each PMS represents "available" differently:
   `rentable: true` + no `leaseId` (Cubby), `statusCode === "AVAILABLENOW"`
   (Cortland), `iDaysVacant >= 0` (SiteLink). Always log skipped units.
+- **XML/MITS5 sources** — Use Cheerio via `/lib/utils/xml.ts` (`parse()`
+  wraps `cheerio.load()` with `{ xml: true }`). MITS5 XML has multiple
+  offer element types (`ChargeOfferItem`, `PetOfferItem`, `ParkingOfferItem`,
+  `StorageOfferItem`) — use a combined CSS selector. Access tag names via
+  `el.tagName` (Cheerio). When MITS codes don't map 1:1 to SightMap types,
+  build a multi-tier resolution: InternalCode lookup → Name regex heuristics
+  → ClassCode defaults.
+- **API value normalization** — The SightMap API may normalize values on
+  write (e.g., `""` → `null`, `"monthly_rent"` → `"base_rent"`). If your
+  diff compares source values against API-returned values, use the API's
+  canonical forms to avoid phantom updates on re-run. Always verify
+  idempotency by running the command twice.
 
 ---
 
@@ -678,6 +690,85 @@ export async function handler(argv: Arguments) {
 - Each operation wrapped in try/catch per item (one failure shouldn't abort).
 - Match by `provider_id` — the PMS fee ID stored on the SightMap expense.
 
+### Expenses: Valid SightMap Enum Values
+
+**CRITICAL:** The SightMap API validates enum values strictly. Use these
+exact strings — sourced from BH Management's `field_mappings.ts` (the
+known-good reference) and confirmed against the live API.
+
+**`value_type`** (what kind of amount this expense represents):
+
+| Value | Use When |
+|-------|----------|
+| `"amount"` | Fixed dollar amount (most common) |
+| `"range"` | Variable amount with min/max |
+| `"percentage"` | Percentage of rent |
+| `"text"` | Descriptive text, no numeric value |
+
+> ⚠️ Do NOT use `"flat"` — the API rejects it. Use `"amount"` instead.
+
+**`due_at_timing`** (when the fee is due):
+
+| Value | Use When |
+|-------|----------|
+| `"move_in"` | Due at move-in |
+| `"move_out"` | Due at move-out |
+| `"application"` | Due at application |
+| `null` | Recurring/during term |
+
+> ⚠️ Do NOT use `"at_move_in"`, `"at_move_out"`, or `"at_application"` —
+> the API rejects the `at_` prefix.
+
+**`type`** (expense category — the API auto-assigns `category` and `group`):
+
+| Category | Valid Types |
+|----------|-------------|
+| Administrative | `admin`, `application`, `deposit`, `screening`, `transfer`, `holding`, `subletting`, `move_in`, `move_out` |
+| Penalties | `late_payment`, `insufficient_funds`, `violation` |
+| Insurance | `renters_insurance` |
+| Legal | `inspection`, `legal_fees` |
+| Services | `amenity`, `cleaning`, `maintenance`, `packages`, `pest_control` |
+| Utilities | `utilities_other`, `electricity`, `gas`, `water`, `trash`, `cable`, `internet`, `bundled_utilities`, `sewer` |
+| Pets | `pets_other`, `pet_deposit_other`, `pet_rent_other` |
+| Parking | `parking_other`, `assigned_parking`, `private_garage` |
+| Storage | `storage` |
+| Other | `other`, `technology` |
+
+> ⚠️ Common mistakes: `"electric"` → use `"electricity"`, `"late"` → use
+> `"late_payment"`, `"nsf"` → use `"insufficient_funds"`, `"pet_rent"` →
+> use `"pet_rent_other"`, `"pet_deposit"` → use `"pet_deposit_other"`,
+> `"trash_removal"` → use `"trash"`, `"parking"` → use `"parking_other"`.
+
+**`percentage_ref`** (reference for percentage amounts):
+
+| Value | Meaning |
+|-------|---------|
+| `"base_rent"` | Percentage of base rent |
+
+> ⚠️ The API normalizes `"monthly_rent"` to `"base_rent"`. Use `"base_rent"`.
+
+**`provider_code` and `tooltip_label`** — Use `null` (not `""`) when empty.
+The API normalizes empty strings to `null`, causing phantom diffs on re-run.
+
+### Expenses: Scoped Deletion Pattern
+
+When deleting stale expenses, **scope deletions to your provider prefix**.
+Don't delete all orphans — an asset may have expenses from multiple sources
+(manual entry, other PMS integrations).
+
+```ts
+// Only delete expenses YOUR integration manages.
+const PREFIX = "myprovider:";
+for (const expense of existing) {
+  if (expense.provider_id?.startsWith(PREFIX) && !sourceIds.has(expense.provider_id)) {
+    await sightmap.destroy(...);
+  }
+}
+```
+
+Support a `--delete-on-empty` flag to protect against accidental bulk
+deletion when the source returns empty data (API outage, auth error, etc.).
+
 ### Floor Plans Handler Template
 
 Floor plans use CRUD with FormData for image uploads, plus a cache rebuild.
@@ -1092,14 +1183,20 @@ work because tests use `TestHandler` which captures all log records.
 
 ### Cleanup Pattern (Critical)
 
-**Every** test step must end with this cleanup in exactly this order:
+**Every** test step must restore stubs before the next step runs. If a test
+step throws before `fetch.restore()`, the sinon stub stays active and ALL
+subsequent steps fail with "Attempted to wrap fetch which is already wrapped."
+
 ```ts
-stdout.restore();
-fetch.restore();
-test.reset();
+// Recommended order:
+clock.restore();    // If using test.setTestNow()
+stdout.restore();   // If using sinon.stub(globalThis.console, "log")
+fetch.restore();    // MUST happen — releases the global fetch stub
 ```
 
-`test.reset()` clears the `TestHandler` log records and resets HTTP middleware.
+> ⚠️ **Cascade failures:** If step 3 of 4 throws, step 4 will fail with a
+> confusing sinon error — not a real test failure. Always fix the ROOT cause
+> (the step that actually threw) and cascades resolve automatically.
 
 ### Running Tests
 
@@ -1126,6 +1223,40 @@ RUNNING_UNIT_TESTS=1 TZ=UTC deno test --lock --allow-read --allow-env --allow-im
 3. **Empty data** — No units from provider; assert zero entries sent
 4. **Filtered data** — All units filtered out (e.g., all unavailable)
 5. **Warning scenarios** — Invalid data triggers warnings but doesn't crash
+
+### Unit Tests for Mapping Modules
+
+For expenses (and any integration with complex field mapping), **extract
+mapping logic into a separate module** (e.g., `expense_mappings.ts`) and
+write unit tests for the exported functions. This is critical for:
+
+- **Coverage:** Integration tests (HTTP fixtures) can't practically cover every
+  mapping table entry, skip rule branch, or edge case. Unit tests can cover
+  them all cheaply and push diff coverage above the Codacy 85% threshold.
+- **Testability:** Mapping functions are pure (input → output) so they don't
+  need HTTP fixtures, sinon stubs, or test clock setup.
+- **Pattern:** Follow BH Management's approach — `src/lib/bh/field_mappings.ts`
+  has a corresponding `src/lib/bh/field_mappings.test.ts`.
+
+```ts
+// src/lib/<provider>/expense_mappings.test.ts
+import { assertEquals } from "testing/asserts.ts";
+import { resolveType, shouldSkip, buildProviderId, transformToSM } from "./expense_mappings.ts";
+
+Deno.test({
+  name: "expense_mappings: resolveType",
+  async fn(t) {
+    await t.step("maps ADMIN_FEE to admin", () => {
+      assertEquals(resolveType(makeItem({ internal_code: "ADMIN_FEE" })), "admin");
+    });
+    // Cover every entry in every mapping table...
+  },
+});
+```
+
+Aim for: every mapping table entry, every skip rule branch, every value_type
+path (amount, range, percentage, text), label fallback chain, and edge cases
+like NaN amounts.
 
 ---
 
@@ -1431,6 +1562,12 @@ asset_id,outbound_link_id,manage_url,asset_name
 | `app-smctl` | `main` | `main` |
 | `atlas-integrations` | `main` | `main` or `deploy/*` |
 
+> ⚠️ **Branch isolation:** Always create a dedicated branch per integration
+> type (`feature/provider-expenses`, `feature/provider-pricing`). Never add
+> a new integration command to an existing feature branch for a different
+> integration type — it creates entangled PRs that are hard to review and
+> must be untangled later via squash/cherry-pick.
+
 ### Commit Message Format
 
 ```
@@ -1526,8 +1663,17 @@ After your `app-smctl` branch builds successfully:
 - [ ] Commit message: `:sparkles: Add <Provider> <type> integration (JIRA-XXX).`
 - [ ] Push to feature branch
 - [ ] Open PR with title matching commit message
-- [ ] CI passes
+- [ ] CI passes (lint, tests, Codacy coverage ≥ 85% diff)
 - [ ] PR reviewed and merged
+
+### Phase 6: Live Validation
+
+- [ ] Obtain API keys for a real test property
+- [ ] Run with `--dry-run` first — verify item counts, skip reasons, mapping
+- [ ] Run live — verify all creates succeed (watch for 422 validation errors)
+- [ ] Run a second time — verify **0 updates** (full idempotency)
+- [ ] If any field gets 422'd, check the enum values reference in Section 4
+- [ ] Verify data appears correctly in SightMap manage UI
 
 ---
 
