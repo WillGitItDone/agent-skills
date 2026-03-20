@@ -5,7 +5,7 @@ description: >
   a release note (internal or external). Accepts a Jira ticket key, fetches ticket
   details, and produces a formatted internal release note using the appropriate
   LaunchNotes template. Includes hero image upload and LaunchNotes API integration.
-version: 2.0.0
+version: 2.0.1
 requires:
   env:
     - LAUNCHNOTES_API_TOKEN
@@ -47,6 +47,28 @@ Prompt the user with these choices:
 - **Improvement**
 - **Bug Fix**
 - **New Feature**
+
+### Step 3b: Determine the Product
+
+The product determines which hero image to use and which LaunchNotes category to
+apply. **Check these sources in order — stop as soon as you have a match:**
+
+1. **User's request** — they may have already said the product name.
+2. **`local.md`** — check `~/.copilot/skills/release-notes/local.md` for product
+   declarations. If **one** product is listed, use it without prompting. If
+   **multiple** products are listed, present them as choices and ask the user
+   to pick one for this release note.
+3. **Jira ticket labels** — the ticket may have a label matching a product name.
+4. **Prompt the user** — if none of the above resolved the product, ask:
+
+   "Which product is this release note for?"
+   - TouchTour
+   - SightMap
+   - Asset Intelligence
+   - Spaces
+
+Products not in that list (API, Atlas, Portal, Shade, Unit Map) do not have hero
+images yet — note this and proceed without a hero image unless the user provides one.
 
 ### Step 4: Load the Correct Template and TouchTour Context
 
@@ -231,8 +253,9 @@ variables = {
 
 **Step 8b: Upload hero image and add category/change type labels**
 
-Every release note pushed to LaunchNotes must include a hero image. Select the
-image based on the **product** and **release note type**.
+Every release note pushed to LaunchNotes must include a hero image. Use the
+**product** (from Step 3b) and **release note type** (from Step 3) to select
+the correct image.
 
 Hero images are stored in two locations:
 - **TouchTour images:** `templates/launchNotes/` (in the workspace)
