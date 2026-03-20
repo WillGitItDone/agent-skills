@@ -3,8 +3,15 @@ name: release-notes
 description: >
   Release Notes skill for Engrain. Use this when asked to write, generate, or draft
   a release note (internal or external). Accepts a Jira ticket key, fetches ticket
-  details, determines the note type, and produces a formatted internal release note
-  using the appropriate LaunchNotes template.
+  details, and produces a formatted internal release note using the appropriate
+  LaunchNotes template. Includes hero image upload and LaunchNotes API integration.
+version: 2.0.0
+requires:
+  env:
+    - LAUNCHNOTES_API_TOKEN
+    - LAUNCHNOTES_PROJECT_ID
+  tools:
+    - mcp-atlassian-jira_get_issue
 ---
 
 # Release Notes Skill
@@ -32,20 +39,14 @@ Use the `jira_get_issue` tool to fetch the ticket. Read:
 
 ### Step 3: Determine the Release Note Type
 
-**Classify by customer impact, not Jira issue type.** A Jira "Task" or "Story" that
-fixes broken behavior should be written as a Bug Fix. Ask: "From the customer's
-perspective, was something broken or missing?"
+**Always ask the user to select the release note type** unless they have already
+specified it in their request. Do not infer or reason about the type based on the
+Jira ticket contents or issue type.
 
-Use this as a starting point, then override based on customer impact:
-
-| Jira Issue Type | Default LaunchNotes Template |
-|----------------|------------------------------|
-| Story / New Feature | **New Feature** |
-| Bug | **Bug Fix** |
-| Improvement / Task (enhancement) | **Improvement** |
-| Task (fixes broken behavior) | **Bug Fix** (override) |
-
-If unsure, infer from the ticket description. Ask the user if still unclear.
+Prompt the user with these choices:
+- **Improvement**
+- **Bug Fix**
+- **New Feature**
 
 ### Step 4: Load the Correct Template and TouchTour Context
 
@@ -228,15 +229,68 @@ variables = {
 }
 ```
 
-**Step 8b: Add category and change type labels**
+**Step 8b: Upload hero image and add category/change type labels**
 
-After creating the announcement, use `updateAnnouncement` to attach the correct
-category (product area) and change type (release note type):
+Every release note pushed to LaunchNotes must include a hero image. Select the
+image based on the **product** and **release note type**.
+
+Hero images are stored in two locations:
+- **TouchTour images:** `templates/launchNotes/` (in the workspace)
+- **All other product images:** `~/.copilot/skills/release-notes/` (shipped with the skill)
+
+| Product | Bug Fix | Improvement | New Feature |
+|---------|---------|-------------|-------------|
+| TouchTour (all) | `templates/launchNotes/tt-bug-fix.png` | `templates/launchNotes/tt-improvement.png` | `templates/launchNotes/tt-new-feature.png` |
+| SightMap | `~/.copilot/skills/release-notes/sm-bug-fix.png` | `~/.copilot/skills/release-notes/sm-improvement.png` | `~/.copilot/skills/release-notes/sm-new-feature.png` |
+| Asset Intelligence | `~/.copilot/skills/release-notes/ai-bug-fix.png` | `~/.copilot/skills/release-notes/ai-improvement.png` | `~/.copilot/skills/release-notes/ai-new-feature.png` |
+| Spaces | `~/.copilot/skills/release-notes/spaces-bug-fix.png` | `~/.copilot/skills/release-notes/spaces-improvement.png` | `~/.copilot/skills/release-notes/spaces-new-feature.png` |
+
+For products not listed above (API, ATLAS, Portal, Shade, Unit Map), ask the user
+to provide a hero image or skip the hero image step.
+
+**Upload workflow (3 steps):**
+
+1. **Get file metadata** — compute byte size and MD5 checksum (base64-encoded):
+```python
+import os, hashlib, base64
+img_path = "<path to image from table above>"
+size = os.path.getsize(img_path)
+with open(img_path, "rb") as f:
+    checksum = base64.b64encode(hashlib.md5(f.read()).digest()).decode()
+```
+
+2. **Create a direct upload** — call `createDirectUpload` to get a pre-signed S3 URL:
+```python
+query = """mutation CreateDirectUpload($input: CreateDirectUploadInput!) {
+  createDirectUpload(input: $input) {
+    blob { id signedId url headers imagekitUrl }
+    errors
+  }
+}"""
+variables = {
+    "input": {
+        "filename": os.path.basename(img_path),
+        "byteSize": size,
+        "checksum": checksum,
+        "contentType": "image/png"
+    }
+}
+```
+
+3. **PUT the file to S3** — upload the binary file to the returned `url` with the
+   returned `headers` (parsed from JSON string):
+```python
+headers = json.loads(blob["headers"])
+# Use curl: curl -X PUT <url> --data-binary @<img_path> -H "Content-Type: ..." -H "Content-MD5: ..."
+```
+
+Then **update the announcement** with the hero image `signedId`, category, and change type
+in a single call:
 
 ```python
 query = """mutation UpdateAnnouncement($input: UpdateAnnouncementInput!) {
   updateAnnouncement(input: $input) {
-    announcement { id categories { id name } changeTypes(first: 10) { nodes { id name } } }
+    announcement { id heroImage { url filename } categories { id name } changeTypes(first: 10) { nodes { id name } } }
     errors { message path }
   }
 }"""
@@ -245,6 +299,7 @@ variables = {
     "input": {
         "announcement": {
             "id": "<ANNOUNCEMENT_ID from step 8a>",
+            "heroImage": "<signedId from createDirectUpload>",
             "categories": [{"id": "<CATEGORY_ID>"}],
             "changeTypeIds": ["<CHANGE_TYPE_ID>"]
         }
@@ -286,16 +341,18 @@ After a successful push, display:
 - The announcement ID
 - The state (should be "draft")
 - The private permalink (link to view/edit in LaunchNotes)
+- The hero image URL
 
 Example:
 > ✅ Draft announcement created in LaunchNotes.
 > - **ID:** ann_AXuod5nap6KC9
 > - **Status:** Draft
+> - **Hero image:** tt-improvement.png
 > - **Review link:** https://app.launchnotes.com/projects/$LAUNCHNOTES_PROJECT_ID/announcements/<ID>/published
 
 If there are errors, display them and ask the user how to proceed.
 
-**Templates in LaunchNotes** (available but not currently used — content is provided directly):
+**Templates in LaunchNotes** (reference only — do NOT use `templateId` on create):
 
 | Template | ID |
 |----------|-----|
@@ -305,6 +362,16 @@ If there are errors, display them and ask the user how to proceed.
 | Feature Announcement [SightMap] | `tem_N2H7m94Ym58kw` |
 | Feature Announcement [AI] | `tem_FGrmSzGfmKIIf` |
 | Code or Feature Removal | `tem_ldaxSI6nvn9Cm` |
+| Spaces Update | `tem_ZTKyfhHNPClE4` |
+
+> **⚠️ Template API limitation:** While `CreateAnnouncementAttributes` accepts a
+> `templateId` field, passing it **overrides both headline and contentMarkdown**
+> with the template's placeholder content — and the template structure is sticky
+> (it re-applies on subsequent updates, overwriting custom content). There is no
+> reliable way to create a template-linked draft with custom content via API.
+> Instead, create without `templateId` and provide content directly via
+> `contentMarkdown`. The content already follows the template structure since
+> we write it from the same templates in `templates/launchNotes/`.
 
 ---
 
