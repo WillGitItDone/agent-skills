@@ -5,7 +5,7 @@ description: >
   draft, or create a Jira story, epic, or bug. Loads Engrain context, applies the
   6-section template with correct Jira formatting (blue/green panels), calibrates
   tone from examples, and creates or updates the ticket via MCP.
-version: 1.1.0
+version: 2.0.0
 requires:
   env:
     - JIRA_API_TOKEN
@@ -16,6 +16,7 @@ requires:
     - mcp-atlassian-jira_update_issue
     - mcp-atlassian-jira_get_issue
     - mcp-atlassian-jira_search
+    - mcp-atlassian-jira_create_issue_link
   bins:
     - python3
 ---
@@ -87,6 +88,9 @@ So that [benefit]
 
 - Link related Jira tickets: `[TICKET-KEY](https://engrain.atlassian.net/browse/TICKET-KEY)`
 - Explain the "why" — not just the "what"
+- Keep it focused and actionable — answer "what does the team need to know to start?"
+  Don't dump raw meeting notes, full transcripts, or unedited stakeholder feedback.
+  Summarize the key takeaways.
 
 **Specifications** — H2 + H3 subsections:
 
@@ -130,9 +134,11 @@ So that [benefit]
 ```
 :::panel warning
 ## Open Questions
-- [Question that needs resolution]
+- [Question that needs resolution] — **Recommendation:** [your proposed answer or direction]
 :::
 ```
+
+- Every open question must include a recommendation or best guess to jump-start the conversation
 
 ## Title Conventions
 
@@ -215,8 +221,9 @@ Write the ticket following all formatting standards above. Match the tone and de
 level from the examples:
 
 - **Right-size the detail** — a 1-point bug fix needs less spec than a 13-point integration story
-- **Be specific** — name endpoints, field names, models, database columns, method names,
-  permission strings, and class names when they exist or can be inferred from prior art
+- **Describe behavior, not implementation** — focus on what the system should *do*, not
+  how to build it. Only name specific endpoints, models, columns, or method names when
+  you've done code research (Step 3/4) to back it up. Trust the execution team with the "how."
 - **Link, don't duplicate** — reference Figma, Notion, or other tickets by URL
 - **Name the data hierarchy** — specify where in Account → Asset → Building → Floor → Unit the work applies
 
@@ -269,6 +276,7 @@ the Jira v3 REST API, which renders panels natively.
 1. Draft the full description in Markdown with `:::panel` markers (see format above)
 2. Save to a temp file or pipe via stdin:
    ```bash
+   source ~/.copilot/credentials.env
    python3 scripts/jira-adf-update.py ISSUE-KEY description.md
    # or
    cat <<'EOF' | python3 scripts/jira-adf-update.py ISSUE-KEY -
@@ -284,18 +292,33 @@ the Jira v3 REST API, which renders panels natively.
    :::
    EOF
    ```
-3. The script requires `JIRA_API_TOKEN` env var (already set in this workspace)
+3. The script auto-sources `~/.copilot/credentials.env` when env vars are missing,
+   but explicitly sourcing first is more reliable in all shell environments
 
 **For non-description fields** (summary, labels, priority, epic link, assignee),
 use the MCP tools (`jira_update_issue`, `jira_create_issue`) as normal — panels
 are only a description concern.
+
+#### Linking related tickets
+
+When the ticket references prior art, related work, or follow-up tickets, **create
+Jira issue links** using `jira_create_issue_link` — don't just mention tickets in
+the description text. Use the `Relates` link type for related work.
+
+This populates Jira's native "Linked Issues" section, making relationships visible
+in the sidebar, searchable via JQL (`issueLink`), and navigable without reading
+the description.
+
+**Do both:** link via the API *and* reference in the Context section with explanation.
+The link creates the structural relationship; the Context section explains *why*
+it's relevant (e.g., "follow the same CRUD diff-and-sync pattern").
 
 After creating/updating, confirm the ticket key and link to the user.
 
 ## Important Notes
 
 - **Never ask for story points** — points are determined at sprint kickoff, not during ticket writing
-- **Always assign tickets to Will Fagan** (`wfagan@engrain.com`) unless explicitly told otherwise
+- **Check `local.md`** in this skill's directory for user-specific overrides (e.g., default assignee)
 - **Reference existing tickets** when creating related work
 - **Never assume the project key** — ask the user if not clear
 - Output scoping documents to `projects/[project-name]/` when the ticket involves discovery or planning artifacts
