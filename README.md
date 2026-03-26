@@ -11,7 +11,7 @@ Shared skill library for Copilot CLI users at Engrain.
 | [jira-ticket](skills/jira-ticket/) | Write Jira tickets for the SightMap team at Engrain. | 2.0.0 |
 | [qa-review](skills/qa-review/) | QA review skill for Engrain PRs. | 1.1.0 |
 | [release-notes](skills/release-notes/) | Release Notes skill for Engrain. | 2.0.1 |
-| [skill-share](skills/skill-share/) | Browse, install, update, and publish Copilot CLI skills from the shared agent-skills repo. | 2.1.0 |
+| [skill-share](skills/skill-share/) | Browse, install, update, and publish Copilot CLI skills from the shared agent-skills repo. | 3.0.0 |
 
 ## Skill Details
 
@@ -60,7 +60,7 @@ Release Notes skill for Engrain. Use this when asked to write, generate, or draf
 Browse, install, update, and publish Copilot CLI skills from the shared agent-skills repo. Use this when asked to list skills, install a skill, update skills, or share/publish a skill.
 
 **Requirements:**
-- CLI tools: git
+- CLI tools: git, gh, python3
 
 ## Quick Start
 
@@ -104,7 +104,7 @@ To share a skill you've created:
 1. Create a `SKILL.md` with valid frontmatter (name, description, version, requires)
 2. Tell Copilot: "publish my-skill-name"
 3. The skill-share skill will scan for credentials, update this README, and push a branch
-4. Open a PR for review
+4. A PR is auto-created via `gh pr create`
 
 ---
 
