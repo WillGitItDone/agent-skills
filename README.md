@@ -8,6 +8,7 @@ Shared skill library for Copilot CLI users at Engrain.
 |-------|-------------|---------|
 | [api-data-fetch](skills/api-data-fetch/) | Bulk-fetch data from SightMap or UnitMap APIs for a list of Engrain asset IDs. | 1.1.0 |
 | [build-integration](skills/build-integration/) | Build new PMS integrations for Engrain. | 1.2.0 |
+| [fetch-knowledge](skills/fetch-knowledge/) | Manage a local knowledge base of web-crawled documentation. | 1.0.0 |
 | [jira-ticket](skills/jira-ticket/) | Write Jira tickets for the SightMap team at Engrain. | 2.0.0 |
 | [qa-review](skills/qa-review/) | QA review skill for Engrain PRs. | 1.1.0 |
 | [release-notes](skills/release-notes/) | Release Notes skill for Engrain. | 2.0.1 |
@@ -28,6 +29,13 @@ Build new PMS integrations for Engrain. Covers the full lifecycle: smctl client,
 - Environment variables: SIGHTMAP_API_KEY
 - CLI tools: git, deno, docker
 - MCP tools: mcp-atlassian-jira_get_issue
+
+### fetch-knowledge
+
+Manage a local knowledge base of web-crawled documentation. Use this when asked to fetch docs, add a knowledge source, update knowledge files, crawl a website, or refresh external documentation for use in Copilot context.
+
+**Requirements:**
+- CLI tools: python3, bash
 
 ### jira-ticket
 
@@ -71,12 +79,12 @@ git clone https://github.com/WillGitItDone/agent-skills.git ~/.copilot/skill-cac
 cp -R ~/.copilot/skill-cache/agent-skills/skills/skill-share ~/.copilot/skills/skill-share
 ```
 
-Then restart your Copilot CLI session. You'll see `skill-share` in `/skills`.
+Then restart your Copilot CLI session. You'll see `skill` in `/skills`.
 
 ### Use skill-share to manage skills
 
 - *"List available skills"*
-- *"Install the jira-ticket skill"*
+- *"Install the fetch-knowledge skill"*
 - *"Update all my skills"*
 - *"Setup credentials"*
 
@@ -86,20 +94,12 @@ Skills that need API tokens expect environment variables. Store credentials in
 `~/.copilot/credentials.env` (not in `.zshrc`):
 
 ```bash
-# Create the file
 touch ~/.copilot/credentials.env
 chmod 600 ~/.copilot/credentials.env
-
-# Add to .zshrc (one time)
 echo '[ -f ~/.copilot/credentials.env ] && source ~/.copilot/credentials.env' >> ~/.zshrc
 ```
 
-Then edit `~/.copilot/credentials.env` with your tokens. Run "setup credentials"
-in the skill-share skill for guided setup.
-
 ## Publishing Skills
-
-To share a skill you've created:
 
 1. Create a `SKILL.md` with valid frontmatter (name, description, version, requires)
 2. Tell Copilot: "publish my-skill-name"
