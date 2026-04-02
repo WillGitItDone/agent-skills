@@ -4,7 +4,7 @@ description: >
   Manage a local knowledge base of web-crawled documentation. Use this when asked
   to fetch docs, add a knowledge source, update knowledge files, crawl a website,
   or refresh external documentation for use in Copilot context.
-version: 1.0.0
+version: 1.1.0
 requires:
   bins:
     - python3
@@ -229,45 +229,233 @@ Determine what the user wants from their message and follow the matching steps.
 
 ---
 
-### Setup / Install — "set up fetch-knowledge", "install dependencies", "does this work"
+### Setup / Bootstrap — "set up fetch-knowledge", "bootstrap knowledge base", "install dependencies", "does this work"
+
+This command both health-checks an existing setup AND bootstraps from scratch.
 
 **Steps:**
 
-1. Check for `fetch-knowledge.sh`:
+1. **Determine the workspace root.** Use the current working directory. All files
+   will be created here.
+
+2. **Check for `fetch-knowledge.sh`.** If it exists, note ✅. If missing, **create it**
+   using the full script below. Use the `create` tool to write it, then make it
+   executable:
    ```bash
-   ls -la fetch-knowledge.sh
+   chmod +x fetch-knowledge.sh
    ```
 
-2. Check for `knowledge-sources.txt`:
-   ```bash
-   ls -la knowledge-sources.txt
+3. **Check for `knowledge-sources.txt`.** If it exists, note ✅. If missing, **create it**
+   with this starter content:
+
+   ```
+   # Knowledge sources to fetch and keep up to date.
+   #
+   # Format (tab-separated):
+   #   URL  TARGET_PATH  [crawl=N]
+   #
+   # TARGET_PATH is relative to knowledge/
+   #   - Single page: use a .md or .json filename  (e.g. products/sightmap.md)
+   #   - Crawled site: use a folder name            (e.g. api/example-docs/)
+   #
+   # crawl=N  (optional, default: 0)
+   #   crawl=0  fetch this URL only
+   #   crawl=1  fetch this page + all links on it (same domain only)
+   #   crawl=2  go 2 levels deep, etc.
+   #
+   # Lines starting with # are comments. Blank lines are ignored.
+
+   # Add your first source below (tab-separated columns):
    ```
 
-3. Check Python dependencies:
-   ```bash
-   python3 -c "import html2text, bs4; print('✅ Dependencies OK')" 2>&1
-   ```
-
-4. If `html2text` or `bs4` are missing:
-   ```bash
-   pip3 install html2text beautifulsoup4
-   ```
-
-5. Check the `knowledge/` directory exists (create if not):
+4. **Create `knowledge/` directory** if it doesn't exist:
    ```bash
    mkdir -p knowledge
    ```
 
-6. Report the health check:
+5. **Check Python dependencies:**
+   ```bash
+   python3 -c "import html2text, bs4; print('✅ Dependencies OK')" 2>&1
+   ```
+   If missing, install them:
+   ```bash
+   pip3 install html2text beautifulsoup4
+   ```
+
+6. **Report the health check:**
 
    | Check | Status |
    |-------|--------|
-   | fetch-knowledge.sh | ✅ Found / ❌ Missing |
-   | knowledge-sources.txt | ✅ Found / ❌ Missing |
+   | fetch-knowledge.sh | ✅ Found / ✅ Created |
+   | knowledge-sources.txt | ✅ Found / ✅ Created |
    | python3 | ✅ Found / ❌ Not in PATH |
-   | html2text | ✅ Installed / ❌ Missing |
-   | beautifulsoup4 | ✅ Installed / ❌ Missing |
+   | html2text | ✅ Installed / ✅ Installed |
+   | beautifulsoup4 | ✅ Installed / ✅ Installed |
    | knowledge/ dir | ✅ Exists / ✅ Created |
+
+7. If everything was freshly bootstrapped, tell the user:
+   > ✅ Knowledge base bootstrapped! Next steps:
+   > 1. Add URLs to `knowledge-sources.txt` (or ask me to "add a source")
+   > 2. Run `bash fetch-knowledge.sh` (or ask me to "fetch knowledge")
+
+---
+
+### fetch-knowledge.sh — Full Script
+
+When bootstrapping, create `fetch-knowledge.sh` with **exactly** this content:
+
+```bash
+#!/bin/bash
+# Fetches and updates knowledge files from public URLs defined in knowledge-sources.txt.
+# Supports single-page fetch and recursive crawling (crawl=N).
+# Run manually or automatically via LaunchAgent / cron.
+
+SCRIPT_DIR="$(dirname "$0")"
+SOURCES="${SOURCES:-$SCRIPT_DIR/knowledge-sources.txt}"
+KNOWLEDGE_DIR="$SCRIPT_DIR/knowledge"
+
+# Python crawler: handles single pages and recursive crawls
+CRAWLER=$(cat << 'PYEOF'
+import sys, os, re, json, html2text, datetime
+from urllib.request import Request, urlopen
+from urllib.parse import urljoin, urlparse
+from urllib.error import URLError
+from bs4 import BeautifulSoup
+
+url      = sys.argv[1]   # seed URL
+target   = sys.argv[2]   # output path (file for single, dir for crawl)
+depth    = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; KnowledgeBot/1.0)"}
+base_domain = urlparse(url).netloc
+
+def fetch(u):
+    try:
+        req = Request(u, headers=HEADERS)
+        with urlopen(req, timeout=15) as r:
+            ct = r.headers.get("Content-Type", "")
+            return r.read().decode("utf-8", errors="replace"), ct
+    except Exception as e:
+        return None, str(e)
+
+def to_markdown(html, source_url):
+    h = html2text.HTML2Text()
+    h.ignore_links = False
+    h.ignore_images = True
+    h.body_width = 0
+    ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    return f"<!-- Source: {source_url} -->\n<!-- Fetched: {ts} -->\n\n" + h.handle(html)
+
+def url_to_filename(u):
+    parsed = urlparse(u)
+    path = parsed.path.strip("/").replace("/", "__") or "index"
+    if parsed.query:
+        path += "__" + re.sub(r'[^a-zA-Z0-9_-]', '_', parsed.query)
+    return path + ".md"
+
+def extract_links(html, base):
+    soup = BeautifulSoup(html, "html.parser")
+    links = set()
+    for tag in soup.find_all("a", href=True):
+        href = urljoin(base, tag["href"])
+        parsed = urlparse(href)
+        if parsed.netloc == base_domain and parsed.scheme in ("http", "https"):
+            clean = parsed._replace(fragment="").geturl()
+            links.add(clean)
+    return links
+
+def save_json(content, path):
+    try:
+        parsed = json.loads(content)
+        with open(path, "w") as f:
+            json.dump(parsed, f, indent=2)
+    except Exception:
+        with open(path, "w") as f:
+            f.write(content)
+
+# --- Single page (crawl=0) ---
+if depth == 0:
+    content, ct = fetch(url)
+    if content is None:
+        print(f"  ERROR: {ct}", file=sys.stderr)
+        sys.exit(1)
+    if target.endswith(".json"):
+        save_json(content, target)
+    else:
+        with open(target, "w") as f:
+            f.write(to_markdown(content, url))
+    print(f"  ✓ {url}")
+
+# --- Recursive crawl (crawl=N) ---
+else:
+    os.makedirs(target, exist_ok=True)
+    visited = set()
+    queue = [(url, 0)]
+    saved = 0
+
+    while queue:
+        current_url, current_depth = queue.pop(0)
+        if current_url in visited:
+            continue
+        visited.add(current_url)
+
+        content, ct = fetch(current_url)
+        if content is None:
+            print(f"  SKIP (error): {current_url}")
+            continue
+
+        fname = url_to_filename(current_url)
+        out_path = os.path.join(target, fname)
+        with open(out_path, "w") as f:
+            f.write(to_markdown(content, current_url))
+        saved += 1
+        print(f"  ✓ [{current_depth}] {current_url}")
+
+        if current_depth < depth:
+            for link in extract_links(content, current_url):
+                if link not in visited:
+                    queue.append((link, current_depth + 1))
+
+    print(f"  📁 {saved} pages saved to {target}")
+PYEOF
+)
+
+echo "🌐 Fetching knowledge from web sources..."
+echo ""
+
+while IFS=$'\t' read -r url target_path crawl_opt || [[ -n "$url" ]]; do
+    # Skip comments and blank lines
+    [[ "$url" =~ ^#.*$ || -z "$url" ]] && continue
+
+    # Parse crawl depth from optional 3rd column (e.g. "crawl=3")
+    depth=0
+    if [[ "$crawl_opt" =~ crawl=([0-9]+) ]]; then
+        depth="${BASH_REMATCH[1]}"
+    fi
+
+    target="$KNOWLEDGE_DIR/$target_path"
+
+    if [[ "$depth" -gt 0 ]]; then
+        echo "🕸️  $url (crawl depth=$depth)"
+        mkdir -p "$target"
+    else
+        echo "📄 $url"
+        mkdir -p "$(dirname "$target")"
+    fi
+
+    python3 -c "$CRAWLER" "$url" "$target" "$depth"
+    echo ""
+
+done < "$SOURCES"
+
+echo "✅ Done."
+```
+
+**Important notes about the script:**
+- The `SOURCES` variable defaults to `knowledge-sources.txt` beside the script, but
+  can be overridden via environment variable (e.g., `SOURCES=/dev/stdin`)
+- The User-Agent is generic (`KnowledgeBot/1.0`) — not team-specific
+- The script is self-contained: Python code is embedded inline, no external files needed
 
 ---
 
