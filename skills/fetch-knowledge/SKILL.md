@@ -4,7 +4,7 @@ description: >
   Manage a local knowledge base of web-crawled documentation. Use this when asked
   to fetch docs, add a knowledge source, update knowledge files, crawl a website,
   or refresh external documentation for use in Copilot context.
-version: 1.1.0
+version: 1.2.0
 requires:
   bins:
     - python3
@@ -265,7 +265,18 @@ This command both health-checks an existing setup AND bootstraps from scratch.
    #
    # Lines starting with # are comments. Blank lines are ignored.
 
-   # Add your first source below (tab-separated columns):
+   # Developer docs — crawl 3 levels deep to capture all subpages
+   https://developers.unitmap.com/	api/unitmap-developers/	crawl=3
+   https://developers.sightmap.com/	api/sightmap-developers/	crawl=3
+
+   # OpenAPI specs (saved as JSON, single page)
+   # Note: /openapi returns an HTML viewer; /openapi.json returns the raw spec
+   https://api.unitmap.com/v1/openapi.json	api/unitmap-openapi.json
+   https://api.sightmap.com/v1/openapi.json	api/sightmap-openapi.json
+
+   # Product pages (single page each)
+   https://www.engrain.com/sightmap	products/sightmap-product-page.md
+   https://www.engrain.com/partners/unit-map-app-custom-app-builders	products/unitmap-partners.md
    ```
 
 4. **Create `knowledge/` directory** if it doesn't exist:
