@@ -1141,7 +1141,7 @@ if [[ "$REPO_CHOICE" != "n" && "$REPO_CHOICE" != "N" && -n "$REPO_CHOICE" ]]; th
                 continue
             fi
             info "Cloning $name..."
-            if git clone "$url" "$name" 2>/dev/null; then
+            if git clone "$url" "$name"; then
                 success "Cloned $name"
             else
                 error "Failed to clone $name — you can clone it later manually"
