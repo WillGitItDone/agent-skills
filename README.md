@@ -1,6 +1,22 @@
-# Agent Skills
+# Agent Skills & Starter Pack
 
-Shared skill library for Copilot CLI users at Engrain.
+Shared skill library and workspace setup wizard for Copilot CLI users at Engrain.
+
+## 🚀 New? Start Here
+
+Set up a fully configured Copilot CLI workspace in ~5 minutes:
+
+```bash
+git clone https://github.com/WillGitItDone/agent-skills.git
+cd agent-skills/starter-pack
+./setup.sh
+```
+
+The wizard installs prerequisites, creates your workspace with Engrain context, and sets up your terminal alias. Choose optional packs for Jira ticket writing or code analysis.
+
+Already have a workspace? Run `./setup.sh` and choose **Update** to sync new content.
+
+---
 
 ## Available Skills
 
