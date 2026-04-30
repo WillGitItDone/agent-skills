@@ -30,6 +30,7 @@ Already have a workspace? Run `./setup.sh` and choose **Update** to sync new con
 | [release-notes](skills/release-notes/) | Release Notes skill for Engrain. | 2.0.1 |
 | [skill-share](skills/skill-share/) | Browse, install, update, and publish Copilot CLI skills from the shared agent-skills repo. | 3.0.0 |
 | [smartsheet-lookup](skills/smartsheet-lookup/) | Look up, read, or summarize data from a customer's Smartsheet. Use this for general data questions (what value is in a cell, how many rows match a condition, etc.). Do NOT use this for validation or diagnostic questions — use smartsheet-validation instead when the user asks whether anything is wrong, wants a health check, or wants to know why a fee isn't appearing. | 2.1.0 |
+| [smartsheet-validation](skills/smartsheet-validation/) | Validate a customer's Smartsheet fee configuration for errors. Use this when the user asks whether anything is wrong, wants a health check, asks why a fee isn't showing up, or wants to validate a customer's fee setup. Runs Fee_Validation.py and classifies issues as true errors vs. warnings. Can also draft a customer-facing email. Prefer this skill over the smartsheet-lookup skill for any diagnostic or validation question. | 1.0.0 |
 
 ## Skill Details
 
@@ -93,6 +94,14 @@ Look up, read, or summarize data from a customer's Smartsheet. Use this for gene
 
 **Requirements:**
 - Environment variables: SMARTSHEET_API_TOKEN
+
+### smartsheet-validation
+
+Validate a customer's Smartsheet fee configuration for errors. Use this when the user asks whether anything is wrong, wants a health check, asks why a fee isn't showing up, or wants to validate a customer's fee setup. Runs Fee_Validation.py and classifies issues as true errors vs. warnings. Can also draft a customer-facing email. Prefer this skill over the smartsheet-lookup skill for any diagnostic or validation question.
+
+**Requirements:**
+- Environment variables: SMARTSHEET_API_TOKEN
+- CLI tools: python3
 
 ## Quick Start
 
