@@ -1,22 +1,6 @@
-# Agent Skills & Starter Pack
+# Agent Skills
 
-Shared skill library and workspace setup wizard for Copilot CLI users at Engrain.
-
-## 🚀 New? Start Here
-
-Set up a fully configured Copilot CLI workspace in ~5 minutes:
-
-```bash
-git clone https://github.com/WillGitItDone/agent-skills.git
-cd agent-skills/starter-pack
-./setup.sh
-```
-
-The wizard installs prerequisites, creates your workspace with Engrain context, and sets up your terminal alias. Choose optional packs for Jira ticket writing or code analysis.
-
-Already have a workspace? Run `./setup.sh` and choose **Update** to sync new content.
-
----
+Shared skill library for Copilot CLI users at Engrain.
 
 ## Available Skills
 
@@ -24,13 +8,14 @@ Already have a workspace? Run `./setup.sh` and choose **Update** to sync new con
 |-------|-------------|---------|
 | [api-data-fetch](skills/api-data-fetch/) | Bulk-fetch data from SightMap or UnitMap APIs for a list of Engrain asset IDs. | 1.1.0 |
 | [build-integration](skills/build-integration/) | Build new PMS integrations for Engrain. | 1.2.0 |
-| [fetch-knowledge](skills/fetch-knowledge/) | Manage a local knowledge base of web-crawled documentation. | 1.0.0 |
+| [fetch-knowledge](skills/fetch-knowledge/) | Manage a local knowledge base of web-crawled documentation. | 1.2.0 |
 | [jira-ticket](skills/jira-ticket/) | Write Jira tickets for the SightMap team at Engrain. | 2.0.0 |
 | [qa-review](skills/qa-review/) | QA review skill for Engrain PRs. | 1.1.0 |
 | [release-notes](skills/release-notes/) | Release Notes skill for Engrain. | 2.0.1 |
+| [salesforce-analytics](skills/salesforce-analytics/) | Analyze Salesforce support tickets for actionable product insights. | 1.3.0 |
 | [skill-share](skills/skill-share/) | Browse, install, update, and publish Copilot CLI skills from the shared agent-skills repo. | 3.0.0 |
-| [smartsheet-lookup](skills/smartsheet-lookup/) | Look up, read, or summarize data from a customer's Smartsheet. Use this for general data questions (what value is in a cell, how many rows match a condition, etc.). Do NOT use this for validation or diagnostic questions — use smartsheet-validation instead when the user asks whether anything is wrong, wants a health check, or wants to know why a fee isn't appearing. | 2.1.0 |
-| [smartsheet-validation](skills/smartsheet-validation/) | Validate a customer's Smartsheet fee configuration for errors. Use this when the user asks whether anything is wrong, wants a health check, asks why a fee isn't showing up, or wants to validate a customer's fee setup. Runs Fee_Validation.py and classifies issues as true errors vs. warnings. Can also draft a customer-facing email. Prefer this skill over the smartsheet-lookup skill for any diagnostic or validation question. | 1.0.0 |
+| [smartsheet-lookup](skills/smartsheet-lookup/) | Look up, read, or summarize data from a customer's Smartsheet. | 2.1.0 |
+| [smartsheet-validation](skills/smartsheet-validation/) | Validate a customer's Smartsheet fee configuration for errors. | 1.0.0 |
 
 ## Skill Details
 
@@ -81,6 +66,14 @@ Release Notes skill for Engrain. Use this when asked to write, generate, or draf
 - Environment variables: LAUNCHNOTES_API_TOKEN, LAUNCHNOTES_PROJECT_ID
 - MCP tools: mcp-atlassian-jira_get_issue
 
+### salesforce-analytics
+
+Analyze Salesforce support tickets for actionable product insights. Queries the Salesforce Cases API (READ-ONLY) and produces a structured report with theme clustering, sub-type analysis, repeat offenders, churn risk flags, and specific action recommendations. GET-only — no POST, PUT, PATCH, or DELETE calls are ever made.
+
+**Requirements:**
+- Environment variables: SALESFORCE_USERNAME, SALESFORCE_CONSUMER_KEY, SALESFORCE_CONSUMER_SECRET, SALESFORCE_SECURITY_TOKEN
+- CLI tools: python3
+
 ### skill-share
 
 Browse, install, update, and publish Copilot CLI skills from the shared agent-skills repo. Use this when asked to list skills, install a skill, update skills, or share/publish a skill.
@@ -112,12 +105,12 @@ git clone https://github.com/WillGitItDone/agent-skills.git ~/.copilot/skill-cac
 cp -R ~/.copilot/skill-cache/agent-skills/skills/skill-share ~/.copilot/skills/skill-share
 ```
 
-Then restart your Copilot CLI session. You'll see `skill` in `/skills`.
+Then restart your Copilot CLI session. You'll see `skill-share` in `/skills`.
 
 ### Use skill-share to manage skills
 
 - *"List available skills"*
-- *"Install the fetch-knowledge skill"*
+- *"Install the jira-ticket skill"*
 - *"Update all my skills"*
 - *"Setup credentials"*
 
@@ -127,12 +120,20 @@ Skills that need API tokens expect environment variables. Store credentials in
 `~/.copilot/credentials.env` (not in `.zshrc`):
 
 ```bash
+# Create the file
 touch ~/.copilot/credentials.env
 chmod 600 ~/.copilot/credentials.env
+
+# Add to .zshrc (one time)
 echo '[ -f ~/.copilot/credentials.env ] && source ~/.copilot/credentials.env' >> ~/.zshrc
 ```
 
+Then edit `~/.copilot/credentials.env` with your tokens. Run "setup credentials"
+in the skill-share skill for guided setup.
+
 ## Publishing Skills
+
+To share a skill you've created:
 
 1. Create a `SKILL.md` with valid frontmatter (name, description, version, requires)
 2. Tell Copilot: "publish my-skill-name"
@@ -142,3 +143,4 @@ echo '[ -f ~/.copilot/credentials.env ] && source ~/.copilot/credentials.env' >>
 ---
 
 *This README is auto-generated by the skill-share skill. Do not edit manually.*
+
