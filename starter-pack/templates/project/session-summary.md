@@ -1,6 +1,6 @@
 # Session Summary — {Project Name}
 
-> Written by Pillar at session end. Read by Pillar at session start.
+> Written by your agent at session end. Read at session start.
 
 ## Date
 
@@ -23,7 +23,7 @@ Brief narrative of what was accomplished this session.
 
 ## Open Questions
 
-- [ ] Question that needs Will's input
+- [ ] Question that needs your input
 - [ ] Question that needs investigation
 
 ## Blockers

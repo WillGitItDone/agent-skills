@@ -76,6 +76,8 @@ Skills (`~/.copilot/skills/`) encode team processes. They are authoritative —
 
 | Skill | When to Use |
 |-------|-------------|
+| `jira-ticket` | Writing Jira stories, epics, or bugs |
+| `qa-review` | QA reviewing a feature branch or PR |
 | `skill-share` | Publishing, installing, or updating skills |
 
 > Additional skills can be installed via `skill-share`. Ask your agent to "list available skills".

@@ -830,13 +830,13 @@ MCPEOF
 
 # $V2_FUNC_NAME — Copilot CLI agent (v2)
 ${V2_FUNC_NAME}() {
-  cd $V2_PATH || return 1
-  if [[ -f $V2_PATH/scripts/refresh.sh && "\$1" != "--fast" ]]; then
-    $V2_PATH/scripts/refresh.sh
+  cd "$V2_PATH" || return 1
+  if [[ -f "$V2_PATH/scripts/refresh.sh" && "\$1" != "--fast" ]]; then
+    "$V2_PATH/scripts/refresh.sh"
   fi
   copilot \\
     --allow-all-urls \\
-    --add-dir $V2_PATH \\
+    --add-dir "$V2_PATH" \\
     --model claude-sonnet-4-5 \\
     --banner \\
     --allow-tool "write" \\
@@ -1192,6 +1192,9 @@ done
 
 # Core: templates/project
 cp "$SCRIPT_DIR/templates/project/README.md" "$WORKSPACE_PATH/templates/project/README.md"
+cp "$SCRIPT_DIR/templates/project/decisions.md" "$WORKSPACE_PATH/templates/project/decisions.md"
+cp "$SCRIPT_DIR/templates/project/session-summary.md" "$WORKSPACE_PATH/templates/project/session-summary.md"
+cp "$SCRIPT_DIR/templates/project/state.yaml" "$WORKSPACE_PATH/templates/project/state.yaml"
 
 # Core: empty dirs
 cp "$SCRIPT_DIR/projects/.gitkeep" "$WORKSPACE_PATH/projects/.gitkeep" 2>/dev/null || touch "$WORKSPACE_PATH/projects/.gitkeep"
@@ -1234,6 +1237,7 @@ if [[ "$INCLUDE_CODE" == true ]]; then
     cp "$SCRIPT_DIR/.github/instructions/deno.instructions.md" "$WORKSPACE_PATH/.github/instructions/deno.instructions.md"
     cp "$SCRIPT_DIR/.github/instructions/react.instructions.md" "$WORKSPACE_PATH/.github/instructions/react.instructions.md"
     cp "$SCRIPT_DIR/.github/instructions/server.instructions.md" "$WORKSPACE_PATH/.github/instructions/server.instructions.md"
+    cp "$SCRIPT_DIR/.github/instructions/atlas-integrations.instructions.md" "$WORKSPACE_PATH/.github/instructions/atlas-integrations.instructions.md"
 
     # Tech docs
     cp "$SCRIPT_DIR/data-lake/technical/tech-stack.md" "$WORKSPACE_PATH/data-lake/technical/tech-stack.md"
@@ -1794,13 +1798,13 @@ if [[ "${SKIP_FUNC:-false}" != true ]]; then
 
 # $AGENT_NAME — Copilot CLI agent (v2)
 ${AGENT_NAME}() {
-  cd $WORKSPACE_PATH || return 1
-  if [[ -f $WORKSPACE_PATH/scripts/refresh.sh && "\$1" != "--fast" ]]; then
-    $WORKSPACE_PATH/scripts/refresh.sh
+  cd "$WORKSPACE_PATH" || return 1
+  if [[ -f "$WORKSPACE_PATH/scripts/refresh.sh" && "\$1" != "--fast" ]]; then
+    "$WORKSPACE_PATH/scripts/refresh.sh"
   fi
   copilot \\
     --allow-all-urls \\
-    --add-dir $WORKSPACE_PATH \\
+    --add-dir "$WORKSPACE_PATH" \\
     --model claude-sonnet-4-5 \\
     --banner \\
     --allow-tool "write" \\

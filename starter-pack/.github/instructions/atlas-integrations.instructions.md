@@ -20,7 +20,7 @@ staleness_warning_days: 90
 
 ## PR & Review Workflow
 
-1. **Will writes container/deployment code** and pushes to a `deploy/*` branch.
+1. **The engineer writes container/deployment code** and pushes to a `deploy/*` branch.
 2. **Rebase before opening the PR** — this repo has many contributors and drifts
    fast. Always run `git fetch origin main && git rebase origin/main` and
    force-push before creating the PR. Never open a PR that is behind `main`.
