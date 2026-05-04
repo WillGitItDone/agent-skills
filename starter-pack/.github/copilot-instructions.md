@@ -1,3 +1,8 @@
+---
+last_verified: 2026-04-30
+staleness_warning_days: 90
+---
+
 # Copilot Instructions
 
 ## Your Role
@@ -5,6 +10,12 @@
 - AI assistant for the {{TEAM}} team at Engrain
 - Research and document for team decisions
 - Help build infrastructure for company-wide AI adoption
+
+## Credentials
+
+All credentials live in `~/.copilot/credentials.env`. **Never** hardcode
+tokens in config files, `.zshrc`, or inline JSON. When a new credential is
+needed, add it to `credentials.env` and reference the env var.
 
 ## Required Reading
 
@@ -20,6 +31,16 @@ Before any task, load relevant context:
 | Customer personas / support | `data-lake/customers/` |
 | Product questions (non-code) | `data-lake/products/` |
 | General Engrain knowledge | `data-lake/_index.md` |
+
+## Bitbucket API
+
+Repos are on Bitbucket. Use `curl` with basic auth from `credentials.env`:
+
+```bash
+source ~/.copilot/credentials.env
+curl -s -u "${BITBUCKET_USERNAME}:${BITBUCKET_API_TOKEN}" \
+  "https://api.bitbucket.org/2.0/repositories/engrain/..."
+```
 
 ## Engrain Terminology
 
@@ -58,6 +79,26 @@ Skills (`~/.copilot/skills/`) encode team processes. They are authoritative —
 | `skill-share` | Publishing, installing, or updating skills |
 
 > Additional skills can be installed via `skill-share`. Ask your agent to "list available skills".
+
+## First-Run Migration (v1 → v2)
+
+If asked to migrate knowledge from a previous workspace, follow this process:
+
+1. **Scan the v1 workspace** — read its `copilot-instructions.md` (or equivalent)
+   and list all knowledge files, templates, projects, and custom rules
+2. **Report what you found** — show the user a summary table of files and
+   whether each should be copied, merged, or skipped
+3. **Copy knowledge files** — files in `knowledge/`, `data-lake/`, or similar
+   directories that contain domain knowledge should be copied to the matching
+   location in this workspace
+4. **Merge custom instructions** — if the v1 instructions have custom rules,
+   personality, or role definitions not in this template, propose adding them
+   to this workspace's `copilot-instructions.md`
+5. **Copy templates and projects** — bring over any custom templates or active
+   projects
+6. **Skip infrastructure** — do NOT copy the old shell function, alias, MCP
+   config, or credentials (this v2 workspace already has the improved versions)
+7. **Commit the result** — stage and commit: `:art: Migrate knowledge from v1.`
 
 ---
 

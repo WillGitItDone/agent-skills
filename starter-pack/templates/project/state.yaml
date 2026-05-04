@@ -1,0 +1,42 @@
+# Project State — {Project Name}
+#
+# Machine-readable project status. Updated by the agent as work progresses.
+# Read by the agent at session start to understand current state.
+
+project: "{project-name}"
+status: active  # active | paused | blocked | complete | archived
+started: "YYYY-MM-DD"
+last_session: "YYYY-MM-DD"
+
+# Jira references
+epic: ""       # e.g., SM-1234
+board: ""      # e.g., SightMap Board
+
+# Current focus
+current_phase: ""   # e.g., "Phase 2: Implementation"
+current_task: ""    # e.g., "Build API endpoint for unit search"
+
+# Blockers (empty list = no blockers)
+blockers: []
+  # - description: "Waiting on API key from vendor"
+  #   owner: "Will"
+  #   since: "YYYY-MM-DD"
+
+# Open questions needing human input
+open_questions: []
+  # - question: "Should we support batch operations?"
+  #   context: "API design decision — affects endpoint shape"
+  #   priority: high  # high | medium | low
+
+# Next actions (ordered by priority)
+next_actions: []
+  # - "Write migration for new table"
+  # - "Update OpenAPI spec"
+  # - "Create Jira tickets for Phase 3"
+
+# Key files for this project (quick reference)
+key_files: []
+  # - path: "repos/app-sightmap/server/app/Http/Controllers/UnitController.php"
+  #   role: "Main controller being modified"
+  # - path: "projects/unit-search/scope.md"
+  #   role: "Scope document"

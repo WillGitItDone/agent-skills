@@ -253,11 +253,10 @@ The user will ask you to do one of these things. Determine intent from their mes
    #
    # After editing, restart your shell or run: source ~/.copilot/credentials.env
 
-   # Jira / Confluence (mcp-atlassian)
+   # Jira (mcp-atlassian)
    # export JIRA_URL="https://your-org.atlassian.net"
    # export JIRA_USERNAME="you@company.com"
    # export JIRA_API_TOKEN="atl_..."
-   # export CONFLUENCE_URL="https://your-org.atlassian.net/wiki"
 
    # GitHub (for MCP servers — copilot login handles CLI auth separately)
    # export GITHUB_TOKEN="ghp_..."
@@ -289,7 +288,7 @@ The user will ask you to do one of these things. Determine intent from their mes
 6. **Migration check.** Scan `.zshrc` for credential-like exports that should move
    to `credentials.env`:
    ```bash
-   grep -nE '^export (JIRA_|CONFLUENCE_|GITHUB_TOKEN|BITBUCKET_|OPENAI_API)' ~/.zshrc
+   grep -nE '^export (JIRA_|GITHUB_TOKEN|BITBUCKET_|OPENAI_API)' ~/.zshrc
    ```
    If any are found, tell the user:
    > ⚠️ Found credentials in `.zshrc` that should move to `~/.copilot/credentials.env`:

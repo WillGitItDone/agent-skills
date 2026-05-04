@@ -80,17 +80,19 @@ divider
 
 # ── Mode Selection ──────────────────────────────────────────
 echo ""
-echo -e "  ${BOLD}Do you already have a Copilot workspace set up?${NC}"
+echo -e "  ${BOLD}What would you like to do?${NC}"
 echo ""
-echo -e "    ${CYAN}1${NC}  No  — set up from scratch"
-echo -e "    ${CYAN}2${NC}  Yes — update my existing workspace"
+echo -e "    ${CYAN}1${NC}  Fresh install — set up from scratch"
+echo -e "    ${CYAN}2${NC}  Update — update my existing workspace files"
+echo -e "    ${CYAN}3${NC}  Upgrade to v2 — create a v2 workspace alongside my current agent"
 echo ""
-echo -en "  ${YELLOW}?${NC}  Choose [1/2]: "
+echo -en "  ${YELLOW}?${NC}  Choose [1/2/3]: "
 read -r MODE_CHOICE
 echo ""
 
 case "$MODE_CHOICE" in
     2) MODE="update" ;;
+    3) MODE="upgrade" ;;
     *) MODE="fresh" ;;
 esac
 
@@ -302,7 +304,7 @@ LOCALEOF
 
     # Check mcp-config
     if [[ ! -f "$COPILOT_DIR/mcp-config.json" ]]; then
-        warn "No mcp-config.json found — Jira/Confluence integration won't work"
+        warn "No mcp-config.json found — Jira integration won't work"
         if confirm "Set up Jira connection now?"; then
             SETUP_CREDS=true
         fi
@@ -327,18 +329,15 @@ LOCALEOF
 # Engrain Copilot CLI credentials
 # Sourced by .zshrc — keep this file secure (chmod 600)
 
-# Atlassian (Jira + Confluence)
+# Atlassian (Jira)
 export JIRA_URL="https://engrain.atlassian.net"
 export JIRA_USERNAME="$UPDATE_EMAIL"
 export JIRA_USER_EMAIL="$UPDATE_EMAIL"
 export JIRA_API_TOKEN="$UPDATE_TOKEN"
-export CONFLUENCE_URL="https://engrain.atlassian.net/wiki"
-export CONFLUENCE_USERNAME="$UPDATE_EMAIL"
-export CONFLUENCE_API_TOKEN="$UPDATE_TOKEN"
 
 # Uncomment and fill in as needed:
-# export GITHUB_TOKEN=""
-# export BITBUCKET_APP_PASSWORD=""
+# export BITBUCKET_USERNAME=""
+# export BITBUCKET_API_TOKEN=""
 # export SIGHTMAP_API_KEY=""
 CREDEOF
             chmod 600 "$CREDS_FILE"
@@ -363,10 +362,7 @@ CREDEOF
       "env": {
         "JIRA_URL": "https://engrain.atlassian.net",
         "JIRA_USERNAME": "$UPDATE_EMAIL",
-        "JIRA_API_TOKEN": "$UPDATE_TOKEN",
-        "CONFLUENCE_URL": "https://engrain.atlassian.net/wiki",
-        "CONFLUENCE_USERNAME": "$UPDATE_EMAIL",
-        "CONFLUENCE_API_TOKEN": "$UPDATE_TOKEN"
+        "JIRA_API_TOKEN": "$UPDATE_TOKEN"
       }
     }
   }
@@ -394,8 +390,618 @@ MCPEOF
 fi
 
 # ═══════════════════════════════════════════════════════════
-# FRESH INSTALL MODE
+# UPGRADE MODE (v1 → v2)
 # ═══════════════════════════════════════════════════════════
+if [[ "$MODE" == "upgrade" ]]; then
+    header "Upgrade to v2"
+
+    echo "  This will create a new v2 workspace alongside your"
+    echo "  current agent. Your existing setup stays untouched."
+    echo ""
+
+    # ── Locate v1 workspace ─────────────────────────────────
+    prompt V1_PATH "Where is your current workspace? (e.g., ~/Dash)" ""
+    V1_PATH="${V1_PATH/#\~/$HOME}"
+
+    if [[ ! -d "$V1_PATH" ]]; then
+        error "Directory not found: $V1_PATH"
+        exit 1
+    fi
+    if [[ ! -f "$V1_PATH/.github/copilot-instructions.md" ]]; then
+        warn "No .github/copilot-instructions.md found"
+        if ! confirm "Continue anyway? This might not be a Copilot workspace"; then
+            exit 0
+        fi
+    fi
+    success "Found workspace at $V1_PATH"
+    echo ""
+
+    # ── Scan v1 ─────────────────────────────────────────────
+    header "Scanning Your v1 Workspace"
+
+    V1_NAME=$(basename "$V1_PATH")
+    V1_NAME_LOWER=$(lowercase "$V1_NAME")
+
+    # Count files by category
+    V1_KNOWLEDGE=0
+    V1_TEMPLATES=0
+    V1_PROJECTS=0
+    V1_INSTRUCTIONS=0
+
+    [[ -d "$V1_PATH/knowledge" ]] && V1_KNOWLEDGE=$(find "$V1_PATH/knowledge" -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+    [[ -d "$V1_PATH/data-lake" ]] && V1_KNOWLEDGE=$((V1_KNOWLEDGE + $(find "$V1_PATH/data-lake" -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' ')))
+    [[ -d "$V1_PATH/context" ]] && V1_KNOWLEDGE=$((V1_KNOWLEDGE + $(find "$V1_PATH/context" -type f -name "*.md" 2>/dev/null | wc -l | tr -d ' ')))
+    [[ -d "$V1_PATH/templates" ]] && V1_TEMPLATES=$(find "$V1_PATH/templates" -type f 2>/dev/null | wc -l | tr -d ' ')
+    [[ -d "$V1_PATH/projects" ]] && V1_PROJECTS=$(find "$V1_PATH/projects" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+    [[ -d "$V1_PATH/.github/instructions" ]] && V1_INSTRUCTIONS=$(find "$V1_PATH/.github/instructions" -type f 2>/dev/null | wc -l | tr -d ' ')
+
+    echo -e "  ${BOLD}Agent name:${NC}        $V1_NAME"
+    echo -e "  ${BOLD}Knowledge files:${NC}   $V1_KNOWLEDGE"
+    echo -e "  ${BOLD}Templates:${NC}         $V1_TEMPLATES"
+    echo -e "  ${BOLD}Projects:${NC}          $V1_PROJECTS"
+    echo -e "  ${BOLD}Code instructions:${NC} $V1_INSTRUCTIONS"
+    echo ""
+
+    # Check what v2 improves
+    echo -e "  ${BOLD}v2 improvements for this workspace:${NC}"
+    echo ""
+
+    if [[ "$V1_INSTRUCTIONS" -eq 0 ]]; then
+        echo -e "    ${GREEN}+${NC}  Code-specific instructions (.github/instructions/*.md)"
+    else
+        echo -e "    ${DIM}✓${NC}  Already has code instructions"
+    fi
+
+    # Check if v1 uses a bare alias or full function
+    V1_HAS_FUNC=false
+    if grep -q "${V1_NAME_LOWER}()" "$HOME/.zshrc" 2>/dev/null; then
+        V1_HAS_FUNC=true
+    fi
+    if grep -q "alias ${V1_NAME_LOWER}=" "$HOME/.zshrc" 2>/dev/null && [[ "$V1_HAS_FUNC" != true ]]; then
+        echo -e "    ${GREEN}+${NC}  Full shell function (replaces bare alias)"
+    elif [[ "$V1_HAS_FUNC" == true ]]; then
+        echo -e "    ${YELLOW}~${NC}  Shell function exists (v2 adds tool permissions)"
+    else
+        echo -e "    ${GREEN}+${NC}  Shell function with tool permissions"
+    fi
+
+    # Check credentials location
+    V1_CREDS_IN_ZSHRC=false
+    if grep -qE '^export (JIRA_|BITBUCKET_|ATLASSIAN_)' "$HOME/.zshrc" 2>/dev/null; then
+        V1_CREDS_IN_ZSHRC=true
+        echo -e "    ${GREEN}+${NC}  Credential governance (move from .zshrc → credentials.env)"
+    else
+        echo -e "    ${DIM}✓${NC}  Credentials not in .zshrc"
+    fi
+
+    echo -e "    ${GREEN}+${NC}  Bitbucket API via curl (no extra MCP needed)"
+    echo -e "    ${GREEN}+${NC}  Freshness tracking on documents"
+    echo -e "    ${GREEN}+${NC}  Agent-assisted migration from v1"
+    echo ""
+
+    if ! confirm "Create a v2 workspace?"; then
+        info "No changes made."
+        exit 0
+    fi
+
+    # ── Naming ──────────────────────────────────────────────
+    echo ""
+    V2_DEFAULT_NAME="${V1_NAME_LOWER}2"
+    prompt V2_FUNC_NAME "Shell function name for v2" "$V2_DEFAULT_NAME"
+    V2_FUNC_NAME=$(echo "$V2_FUNC_NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+
+    V2_DEFAULT_FOLDER="${V1_PATH}-v2"
+    prompt V2_PATH "v2 workspace path" "$V2_DEFAULT_FOLDER"
+    V2_PATH="${V2_PATH/#\~/$HOME}"
+
+    if [[ -d "$V2_PATH" ]]; then
+        warn "$V2_PATH already exists"
+        if ! confirm "Continue? (existing files may be overwritten)"; then
+            exit 0
+        fi
+    fi
+
+    echo ""
+    echo -e "  ${BOLD}Plan:${NC}"
+    echo "    v1 workspace:    $V1_PATH (untouched)"
+    echo "    v2 workspace:    $V2_PATH (new)"
+    echo "    v1 command:      $V1_NAME_LOWER (untouched)"
+    echo "    v2 command:      $V2_FUNC_NAME (new)"
+    echo ""
+    if ! confirm "Proceed?"; then
+        exit 0
+    fi
+
+    # ── Create v2 scaffold ──────────────────────────────────
+    header "Creating v2 Workspace"
+
+    for dir in .github/instructions data-lake/company data-lake/customers \
+               data-lake/integrations data-lake/journeys data-lake/operations \
+               data-lake/products data-lake/reference data-lake/technical \
+               templates/project projects scripts; do
+        mkdir -p "$V2_PATH/$dir"
+    done
+
+    # Copy core copilot-instructions.md
+    cp "$SCRIPT_DIR/.github/copilot-instructions.md" "$V2_PATH/.github/copilot-instructions.md"
+    success "Core instructions"
+
+    # Copy all instruction files from starter-pack
+    for f in "$SCRIPT_DIR/.github/instructions/"*.md; do
+        [[ -f "$f" ]] && cp "$f" "$V2_PATH/.github/instructions/$(basename "$f")"
+    done
+    success "Code-specific instructions ($(ls "$V2_PATH/.github/instructions/" | wc -l | tr -d ' ') files)"
+
+    # Copy Data Lake
+    if [[ -d "$SCRIPT_DIR/data-lake" ]]; then
+        # Use cp -n to not overwrite if user runs twice
+        find "$SCRIPT_DIR/data-lake" -type f | while read -r src; do
+            rel="${src#$SCRIPT_DIR/}"
+            dst="$V2_PATH/$rel"
+            mkdir -p "$(dirname "$dst")"
+            cp "$src" "$dst"
+        done
+        success "Data Lake knowledge base"
+    fi
+
+    # Copy templates
+    if [[ -d "$SCRIPT_DIR/templates" ]]; then
+        find "$SCRIPT_DIR/templates" -type f | while read -r src; do
+            rel="${src#$SCRIPT_DIR/}"
+            dst="$V2_PATH/$rel"
+            mkdir -p "$(dirname "$dst")"
+            cp "$src" "$dst"
+        done
+        success "Templates"
+    fi
+
+    # Copy scripts
+    if [[ -d "$SCRIPT_DIR/scripts" ]]; then
+        for f in "$SCRIPT_DIR/scripts/"*; do
+            [[ -f "$f" ]] && cp "$f" "$V2_PATH/scripts/$(basename "$f")"
+        done
+        chmod +x "$V2_PATH/scripts/"*.sh 2>/dev/null || true
+        success "Scripts"
+    fi
+
+    # Empty dirs
+    touch "$V2_PATH/projects/.gitkeep"
+
+    # ── Content bundles (auto-detect from v1) ───────────────
+    echo ""
+    INCLUDE_JIRA=false
+    INCLUDE_CODE=false
+
+    # Auto-detect from v1
+    if [[ -d "$V1_PATH/templates/jira" ]] || ls "$V1_PATH/.github/instructions/jira"* >/dev/null 2>&1; then
+        info "Detected Jira/PM tools in your v1"
+        INCLUDE_JIRA=true
+    else
+        if confirm "Include Jira & PM Tools pack?"; then
+            INCLUDE_JIRA=true
+        fi
+    fi
+
+    if [[ -d "$V1_PATH/repos" ]] || ls "$V1_PATH/.github/instructions/server"* >/dev/null 2>&1; then
+        info "Detected Code Analysis tools in your v1"
+        INCLUDE_CODE=true
+    else
+        if confirm "Include Code Analysis pack?"; then
+            INCLUDE_CODE=true
+        fi
+    fi
+
+    # Tailor instructions based on packs (same logic as fresh mode)
+    INSTRUCTIONS="$V2_PATH/.github/copilot-instructions.md"
+
+    if [[ "$INCLUDE_JIRA" == true ]]; then
+        sed -i '' '/^- Help build infrastructure/a\
+- Write Jira tickets (stories, epics, bugs) using established templates\
+- Research and document for product decisions' "$INSTRUCTIONS"
+        sed -i '' '/General Engrain knowledge/a\
+| Ticket writing | `templates/jira/` (use appropriate template) |' "$INSTRUCTIONS"
+    fi
+
+    if [[ "$INCLUDE_CODE" == true ]]; then
+        sed -i '' '/^- Help build infrastructure/a\
+- Analyze codebases for scoping and technical discovery\
+- Prototype features and write code across the monorepo\
+- Push branches and PRs for testing' "$INSTRUCTIONS"
+        sed -i '' '/General Engrain knowledge/a\
+| Code analysis | `data-lake/technical/tech-stack.md` |\
+| API work | `data-lake/technical/sightmap-api.md` (summary) + `repos/app-sightmap/openapi/` (full specs) |' "$INSTRUCTIONS"
+        mkdir -p "$V2_PATH/repos"
+        touch "$V2_PATH/repos/.gitkeep"
+    fi
+
+    # Append pack-specific skills to Available Skills table
+    if [[ "$INCLUDE_JIRA" == true ]]; then
+        sed -i '' '/`skill-share`/a\
+| `jira-ticket` | Writing Jira stories, epics, or bugs |' "$INSTRUCTIONS"
+    fi
+    if [[ "$INCLUDE_CODE" == true ]]; then
+        sed -i '' '/`skill-share`/a\
+| `qa-review` | QA reviewing a feature branch or PR |' "$INSTRUCTIONS"
+    fi
+
+    # Append code sections if Code Analysis selected
+    if [[ "$INCLUDE_CODE" == true ]]; then
+        # Insert before the "First-Run Migration" section
+        sed -i '' '/^## First-Run Migration/i\
+## Repo Management\
+\
+All repos are on Bitbucket. Keep local copies fresh before working.\
+\
+| Repo | Clone URL | Default Branch | PR Target |\
+|------|-----------|---------------|-----------||\
+| `app-sightmap` | `git@bitbucket.org:engrain/app-sightmap.git` | `master` | `develop` |\
+| `app-smctl` | `git@bitbucket.org:engrain/app-smctl.git` | `main` | `main` |\
+| `atlas-integrations` | `git@bitbucket.org:engrain/atlas-integrations.git` | `main` | `deploy/*` |\
+| `xp-data-integrations` | `git@bitbucket.org:engrain/xp-data-integrations.git` | `main` | `main` |\
+\
+## Code Analysis Approach\
+\
+1. **Start** with AGENTS.md or README.md in any repo\
+2. **Map** findings to Engrain'"'"'s data hierarchy\
+3. **Use** Engrain terminology in all documentation\
+4. **Output** scoping documents to `projects/[project-name]/`\
+5. **Reference** `data-lake/technical/tech-stack.md` for architectural context\
+\
+## Git Conventions\
+\
+- **Commit format**: `:emoji: Description (JIRA-123).` (end with period)\
+- **Branch naming**: `feature/short-descriptive-name`\
+- **Branching**: From `develop` (app-sightmap) or `main` (other repos)\
+- **Squash**: All WIP commits into one final commit per issue\
+- **PR title**: Must match final commit message exactly\
+- **Workflow**: Rebase (not merge)\
+' "$INSTRUCTIONS"
+    fi
+
+    success "Instructions tailored to your packs"
+
+    # ── Personalize ─────────────────────────────────────────
+    header "Personalizing"
+
+    # Try to detect name/team from v1 instructions
+    V1_INSTR="$V1_PATH/.github/copilot-instructions.md"
+    DETECTED_TEAM=""
+    if [[ -f "$V1_INSTR" ]]; then
+        DETECTED_TEAM=$(grep -oE '{{TEAM}}|for the .+ team' "$V1_INSTR" | head -1 | sed 's/for the //;s/ team//')
+    fi
+
+    prompt USER_TEAM "Your team" "${DETECTED_TEAM:-}"
+
+    # Escape and replace
+    escape_sed() { printf '%s\n' "$1" | sed 's/[\/&\\]/\\&/g'; }
+    ESC_TEAM="$(escape_sed "$USER_TEAM")"
+    find "$V2_PATH" -type f -name "*.md" -exec sed -i '' "s/{{TEAM}}/$ESC_TEAM/g" {} +
+
+    success "Personalized for $USER_TEAM team"
+
+    # ── Skills ──────────────────────────────────────────────
+    header "Skills"
+
+    mkdir -p "$SKILLS_DIR"
+    INSTALL_SKILLS=("skill-share")
+    [[ "$INCLUDE_JIRA" == true ]] && INSTALL_SKILLS+=("jira-ticket")
+    [[ "$INCLUDE_CODE" == true ]] && INSTALL_SKILLS+=("qa-review")
+
+    for skill in "${INSTALL_SKILLS[@]}"; do
+        skill_src="$SCRIPT_DIR/skills/$skill"
+        skill_dst="$SKILLS_DIR/$skill"
+        if [[ -d "$skill_dst" ]]; then
+            # Check for updates
+            if [[ -f "$skill_src/SKILL.md" ]] && ! diff -q "$skill_src/SKILL.md" "$skill_dst/SKILL.md" > /dev/null 2>&1; then
+                echo -e "  ${YELLOW}UPDATE${NC}  $skill"
+                if confirm "    Update? (your local.md preserved)"; then
+                    for f in "$skill_src"/*; do
+                        fname="$(basename "$f")"
+                        [[ "$fname" == "local.md" ]] && continue
+                        cp "$f" "$skill_dst/$fname"
+                    done
+                    success "    Updated $skill"
+                fi
+            else
+                echo -e "  ${DIM}  ✓  $skill (up to date)${NC}"
+            fi
+        else
+            mkdir -p "$skill_dst"
+            for f in "$skill_src"/*; do
+                fname="$(basename "$f")"
+                [[ "$fname" == "local.md" ]] && continue
+                cp "$f" "$skill_dst/$fname"
+            done
+            if [[ ! -f "$skill_dst/local.md" ]]; then
+                cat > "$skill_dst/local.md" << 'LOCALEOF'
+# Local Overrides
+
+> This file is yours to customize. It is never overwritten by skill updates.
+> Guidance in local.md takes precedence over SKILL.md for any conflicts.
+
+<!-- Add your overrides below -->
+LOCALEOF
+            fi
+            success "Installed $skill"
+        fi
+    done
+
+    # ── Credentials ─────────────────────────────────────────
+    header "Credentials"
+
+    if [[ -f "$CREDS_FILE" ]]; then
+        success "credentials.env exists (shared with v1)"
+        echo "  v2 will use the same credentials — no extra setup needed."
+    else
+        echo -e "  ${DIM}Generate an API token at:${NC}"
+        echo -e "  ${CYAN}https://id.atlassian.com/manage-profile/security/api-tokens${NC}"
+        echo ""
+        prompt UPGRADE_EMAIL "Your Engrain email" ""
+        echo -en "${YELLOW}?${NC}  Paste your API token (input is hidden): "
+        read -rs UPGRADE_TOKEN
+        echo ""
+
+        if [[ -n "$UPGRADE_TOKEN" ]]; then
+            cat > "$CREDS_FILE" << CREDEOF
+# Engrain Copilot CLI credentials
+# Sourced by .zshrc — keep this file secure (chmod 600)
+
+# Atlassian (Jira)
+export JIRA_URL="https://engrain.atlassian.net"
+export JIRA_USERNAME="$UPGRADE_EMAIL"
+export JIRA_USER_EMAIL="$UPGRADE_EMAIL"
+export JIRA_API_TOKEN="$UPGRADE_TOKEN"
+
+# Uncomment and fill in as needed:
+# export BITBUCKET_USERNAME=""
+# export BITBUCKET_API_TOKEN=""
+# export SIGHTMAP_API_KEY=""
+CREDEOF
+            chmod 600 "$CREDS_FILE"
+            success "Created credentials.env"
+        else
+            warn "No token — set up later in ~/.copilot/credentials.env"
+        fi
+
+        if ! grep -q "credentials.env" "$HOME/.zshrc" 2>/dev/null; then
+            echo '' >> "$HOME/.zshrc"
+            echo '# Copilot CLI credentials' >> "$HOME/.zshrc"
+            echo '[ -f ~/.copilot/credentials.env ] && source ~/.copilot/credentials.env' >> "$HOME/.zshrc"
+            success "Added credentials sourcing to .zshrc"
+        fi
+    fi
+
+    # Credential migration warning
+    if [[ "$V1_CREDS_IN_ZSHRC" == true ]]; then
+        echo ""
+        warn "Found credentials in .zshrc that should be in credentials.env:"
+        grep -nE '^export (JIRA_|BITBUCKET_|ATLASSIAN_)' "$HOME/.zshrc" 2>/dev/null | sed 's/^/    /'
+        echo ""
+        info "Move them to ~/.copilot/credentials.env and remove from .zshrc"
+    fi
+
+    # ── MCP config ──────────────────────────────────────────
+    MCP_CONFIG="$COPILOT_DIR/mcp-config.json"
+    if [[ ! -f "$MCP_CONFIG" ]]; then
+        header "MCP Server"
+        info "Setting up Jira connection..."
+
+        # Source creds for the env vars
+        [[ -f "$CREDS_FILE" ]] && source "$CREDS_FILE" 2>/dev/null
+
+        cat > "$MCP_CONFIG" << MCPEOF
+{
+  "mcpServers": {
+    "mcp-atlassian": {
+      "command": "uvx",
+      "args": ["mcp-atlassian"],
+      "env": {
+        "JIRA_URL": "https://engrain.atlassian.net",
+        "JIRA_USERNAME": "${JIRA_USERNAME:-}",
+        "JIRA_API_TOKEN": "${JIRA_API_TOKEN:-}"
+      }
+    }
+  }
+}
+MCPEOF
+        success "Created mcp-config.json"
+    else
+        success "mcp-config.json exists (shared with v1)"
+    fi
+
+    # ── Shell function ──────────────────────────────────────
+    header "Shell Function"
+
+    if grep -q "${V2_FUNC_NAME}()" "$HOME/.zshrc" 2>/dev/null; then
+        warn "'$V2_FUNC_NAME' function already exists in .zshrc"
+        if ! confirm "Replace it?"; then
+            info "Kept existing"
+            SKIP_V2_FUNC=true
+        else
+            sed -i '' "s/^${V2_FUNC_NAME}()/# [replaced] &/" "$HOME/.zshrc"
+            SKIP_V2_FUNC=false
+        fi
+    else
+        SKIP_V2_FUNC=false
+    fi
+
+    if [[ "${SKIP_V2_FUNC}" != true ]]; then
+        cat >> "$HOME/.zshrc" << FUNCEOF
+
+# $V2_FUNC_NAME — Copilot CLI agent (v2)
+${V2_FUNC_NAME}() {
+  cd $V2_PATH || return 1
+  if [[ -f $V2_PATH/scripts/refresh.sh && "\$1" != "--fast" ]]; then
+    $V2_PATH/scripts/refresh.sh
+  fi
+  copilot \\
+    --allow-all-urls \\
+    --add-dir $V2_PATH \\
+    --model claude-sonnet-4-5 \\
+    --banner \\
+    --allow-tool "write" \\
+    --allow-tool "shell(curl:*)" \\
+    --allow-tool "shell(cat:*)" \\
+    --allow-tool "shell(head:*)" \\
+    --allow-tool "shell(tail:*)" \\
+    --allow-tool "shell(less:*)" \\
+    --allow-tool "shell(wc:*)" \\
+    --allow-tool "shell(find:*)" \\
+    --allow-tool "shell(ls:*)" \\
+    --allow-tool "shell(tree:*)" \\
+    --allow-tool "shell(file:*)" \\
+    --allow-tool "shell(stat:*)" \\
+    --allow-tool "shell(diff:*)" \\
+    --allow-tool "shell(which:*)" \\
+    --allow-tool "shell(realpath:*)" \\
+    --allow-tool "shell(dirname:*)" \\
+    --allow-tool "shell(basename:*)" \\
+    --allow-tool "shell(pwd)" \\
+    --allow-tool "shell(grep:*)" \\
+    --allow-tool "shell(rg:*)" \\
+    --allow-tool "shell(ag:*)" \\
+    --allow-tool "shell(awk:*)" \\
+    --allow-tool "shell(sed:*)" \\
+    --allow-tool "shell(sort:*)" \\
+    --allow-tool "shell(uniq:*)" \\
+    --allow-tool "shell(cut:*)" \\
+    --allow-tool "shell(tr:*)" \\
+    --allow-tool "shell(jq:*)" \\
+    --allow-tool "shell(echo:*)" \\
+    --allow-tool "shell(printf:*)" \\
+    --allow-tool "shell(git status:*)" \\
+    --allow-tool "shell(git diff:*)" \\
+    --allow-tool "shell(git log:*)" \\
+    --allow-tool "shell(git show:*)" \\
+    --allow-tool "shell(git blame:*)" \\
+    --allow-tool "shell(git rev-parse:*)" \\
+    --allow-tool "shell(git ls-files:*)" \\
+    --allow-tool "shell(git remote:*)" \\
+    --allow-tool "shell(git fetch:*)" \\
+    --allow-tool "shell(git add:*)" \\
+    --allow-tool "shell(git branch:*)" \\
+    --allow-tool "shell(git switch:*)" \\
+    --allow-tool "shell(git stash:*)" \\
+    --allow-tool "shell(git config:*)" \\
+    --allow-tool "shell(git tag:*)" \\
+    --allow-tool "shell(mkdir:*)" \\
+    --allow-tool "shell(touch:*)" \\
+    --allow-tool "shell(env:*)" \\
+    --allow-tool "shell(printenv:*)" \\
+    --allow-tool "shell(uname:*)" \\
+    --allow-tool "shell(whoami)" \\
+    --allow-tool "shell(date:*)" \\
+    --allow-tool "shell(hostname)" \\
+    --deny-tool "shell(sudo:*)" \\
+    --deny-tool "shell(su:*)" \\
+    --deny-tool "shell(eval:*)" \\
+    --deny-tool "shell(exec:*)" \\
+    --deny-tool "shell(bash:*)" \\
+    --deny-tool "shell(sh:*)" \\
+    --deny-tool "shell(zsh:*)" \\
+    --deny-tool "shell(git push --force:*)" \\
+    --deny-tool "shell(git reset --hard:*)" \\
+    --deny-tool "shell(git clean:*)" \\
+    --deny-tool "shell(kubectl:*)" \\
+    --deny-tool "shell(gcloud:*)" \\
+    --deny-tool "shell(terraform:*)" \\
+    --deny-tool "shell(helm:*)" \\
+    --deny-tool "shell(ssh:*)" \\
+    --deny-tool "shell(scp:*)" \\
+    --deny-tool "shell(rsync:*)"
+}
+FUNCEOF
+        success "Added '$V2_FUNC_NAME' shell function"
+    fi
+
+    # ── Git init ────────────────────────────────────────────
+    cd "$V2_PATH"
+    if [[ ! -d ".git" ]]; then
+        git init -q
+        cat > .gitignore << 'GITIGNORE'
+.DS_Store
+Thumbs.db
+repos/
+.obsidian/
+**/.obsidian/
+.env
+*.env
+!scripts/.env.example
+*.swp
+*.swo
+*~
+GITIGNORE
+        git add -A
+        git commit -q -m "Initial v2 workspace setup"
+        success "Git initialized"
+    fi
+
+    # ── Copilot config (trust folder) ───────────────────────
+    CONFIG_FILE="$COPILOT_DIR/config.json"
+    if command -v python3 &>/dev/null; then
+        if [[ -f "$CONFIG_FILE" ]]; then
+            python3 - "$CONFIG_FILE" "$V2_PATH" << 'PYEOF'
+import json, sys
+config_path, ws_path = sys.argv[1], sys.argv[2]
+try:
+    with open(config_path) as f:
+        cfg = json.load(f)
+except (json.JSONDecodeError, ValueError):
+    cfg = {}
+tf = cfg.get("trusted_folders", [])
+if ws_path not in tf:
+    tf.append(ws_path)
+    cfg["trusted_folders"] = tf
+    with open(config_path, "w") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+PYEOF
+        else
+            cat > "$CONFIG_FILE" << CFGEOF
+{
+  "trusted_folders": [
+    "$V2_PATH"
+  ],
+  "renderMarkdown": true
+}
+CFGEOF
+        fi
+        success "Workspace trusted (no 'trust this folder?' prompt)"
+    fi
+
+    # ── Done! ───────────────────────────────────────────────
+    header "Upgrade Complete! 🎉"
+
+    echo -e "  ${BOLD}v1 workspace:${NC}   $V1_PATH ${DIM}(untouched)${NC}"
+    echo -e "  ${BOLD}v2 workspace:${NC}   $V2_PATH"
+    echo -e "  ${BOLD}v1 command:${NC}     $V1_NAME_LOWER ${DIM}(untouched)${NC}"
+    echo -e "  ${BOLD}v2 command:${NC}     $V2_FUNC_NAME"
+    echo ""
+    divider
+    echo ""
+    echo -e "  ${BOLD}Next steps:${NC}"
+    echo ""
+    echo -e "    1. Open a new terminal (or run: ${CYAN}source ~/.zshrc${NC})"
+    echo -e "    2. Launch your v2 agent: ${CYAN}$V2_FUNC_NAME${NC}"
+    echo -e "    3. Ask it to migrate your v1 knowledge:"
+    echo ""
+    echo -e "       ${DIM}\"Scan my v1 workspace at $V1_PATH and migrate my${NC}"
+    echo -e "       ${DIM}knowledge, templates, and custom instructions to${NC}"
+    echo -e "       ${DIM}this v2 workspace\"${NC}"
+    echo ""
+    echo "    Your v2 agent knows how to do this — it will scan v1,"
+    echo "    show you what it found, and copy the relevant files."
+    echo ""
+    divider
+    echo ""
+    echo "  When you're happy with v2, you can remove v1:"
+    echo -e "    ${DIM}rm -rf $V1_PATH${NC}"
+    echo -e "    ${DIM}# and remove the old alias/function from .zshrc${NC}"
+    echo ""
+    success "Happy building! 🚀"
+    echo ""
+    exit 0
+fi
 
 # ── Step 1: Prerequisites ──────────────────────────────────
 header "Step 1: Prerequisites"
@@ -984,7 +1590,7 @@ fi
 # ── Step 8: Credentials ────────────────────────────────────
 header "Step 8: Credentials & Jira Connection"
 
-echo "  This step sets up your Jira/Confluence connection."
+echo "  This step sets up your Jira connection."
 echo "  You'll need an Atlassian API token."
 echo ""
 echo -e "  ${DIM}Generate one at:${NC}"
@@ -1024,18 +1630,15 @@ if [[ "$SKIP_CREDS" != true ]]; then
 # Engrain Copilot CLI credentials
 # Sourced by .zshrc — keep this file secure (chmod 600)
 
-# Atlassian (Jira + Confluence)
+# Atlassian (Jira)
 export JIRA_URL="https://engrain.atlassian.net"
 export JIRA_USERNAME="$USER_EMAIL"
 export JIRA_USER_EMAIL="$USER_EMAIL"
 export JIRA_API_TOKEN="$API_TOKEN"
-export CONFLUENCE_URL="https://engrain.atlassian.net/wiki"
-export CONFLUENCE_USERNAME="$USER_EMAIL"
-export CONFLUENCE_API_TOKEN="$API_TOKEN"
 
 # Uncomment and fill in as needed:
-# export GITHUB_TOKEN=""
-# export BITBUCKET_APP_PASSWORD=""
+# export BITBUCKET_USERNAME=""
+# export BITBUCKET_API_TOKEN=""
 # export SIGHTMAP_API_KEY=""
 CREDEOF
     chmod 600 "$CREDS_FILE"
@@ -1079,10 +1682,7 @@ CREDEOF
       "env": {
         "JIRA_URL": "https://engrain.atlassian.net",
         "JIRA_USERNAME": "$USER_EMAIL",
-        "JIRA_API_TOKEN": "$API_TOKEN",
-        "CONFLUENCE_URL": "https://engrain.atlassian.net/wiki",
-        "CONFLUENCE_USERNAME": "$USER_EMAIL",
-        "CONFLUENCE_API_TOKEN": "$API_TOKEN"
+        "JIRA_API_TOKEN": "$API_TOKEN"
       }
     }
   }
@@ -1141,7 +1741,7 @@ if [[ "$REPO_CHOICE" != "n" && "$REPO_CHOICE" != "N" && -n "$REPO_CHOICE" ]]; th
                 continue
             fi
             info "Cloning $name..."
-            if git clone "$url" "$name"; then
+            if git clone "$url" "$name" 2>/dev/null; then
                 success "Cloned $name"
             else
                 error "Failed to clone $name — you can clone it later manually"
@@ -1156,20 +1756,128 @@ fi
 
 fi  # end INCLUDE_CODE check for repo cloning
 
-# ── Step 10: Shell Alias ───────────────────────────────────
-header "Step 10: Shell Alias"
+# ── Step 10: Shell Function ───────────────────────────────
+header "Step 10: Shell Function"
 
-ALIAS_LINE="alias $AGENT_NAME=\"cd $WORKSPACE_PATH && copilot\""
-
+# Check for existing alias or function
+EXISTING_ALIAS=false
+EXISTING_FUNC=false
 if grep -q "alias $AGENT_NAME=" "$HOME/.zshrc" 2>/dev/null; then
-    success "Alias '$AGENT_NAME' already exists in .zshrc"
+    EXISTING_ALIAS=true
+fi
+if grep -q "${AGENT_NAME}()" "$HOME/.zshrc" 2>/dev/null; then
+    EXISTING_FUNC=true
+fi
+
+if [[ "$EXISTING_ALIAS" == true || "$EXISTING_FUNC" == true ]]; then
+    warn "'$AGENT_NAME' already exists in .zshrc"
+    if ! confirm "Replace with the new v2 shell function?"; then
+        info "Kept existing — you can update manually later"
+        SKIP_FUNC=true
+    else
+        SKIP_FUNC=false
+        # Comment out old definition
+        if [[ "$EXISTING_ALIAS" == true ]]; then
+            sed -i '' "s/^alias ${AGENT_NAME}=/# [replaced by v2] &/" "$HOME/.zshrc"
+        fi
+        if [[ "$EXISTING_FUNC" == true ]]; then
+            # Add a comment before the old function — user can clean up manually
+            sed -i '' "s/^${AGENT_NAME}()/# [replaced by v2] &/" "$HOME/.zshrc"
+        fi
+    fi
 else
-    echo '' >> "$HOME/.zshrc"
-    echo "# Copilot CLI agent" >> "$HOME/.zshrc"
-    echo "$ALIAS_LINE" >> "$HOME/.zshrc"
-    success "Added alias: $AGENT_NAME"
+    SKIP_FUNC=false
+fi
+
+if [[ "${SKIP_FUNC:-false}" != true ]]; then
+    cat >> "$HOME/.zshrc" << FUNCEOF
+
+# $AGENT_NAME — Copilot CLI agent (v2)
+${AGENT_NAME}() {
+  cd $WORKSPACE_PATH || return 1
+  if [[ -f $WORKSPACE_PATH/scripts/refresh.sh && "\$1" != "--fast" ]]; then
+    $WORKSPACE_PATH/scripts/refresh.sh
+  fi
+  copilot \\
+    --allow-all-urls \\
+    --add-dir $WORKSPACE_PATH \\
+    --model claude-sonnet-4-5 \\
+    --banner \\
+    --allow-tool "write" \\
+    --allow-tool "shell(curl:*)" \\
+    --allow-tool "shell(cat:*)" \\
+    --allow-tool "shell(head:*)" \\
+    --allow-tool "shell(tail:*)" \\
+    --allow-tool "shell(less:*)" \\
+    --allow-tool "shell(wc:*)" \\
+    --allow-tool "shell(find:*)" \\
+    --allow-tool "shell(ls:*)" \\
+    --allow-tool "shell(tree:*)" \\
+    --allow-tool "shell(file:*)" \\
+    --allow-tool "shell(stat:*)" \\
+    --allow-tool "shell(diff:*)" \\
+    --allow-tool "shell(which:*)" \\
+    --allow-tool "shell(realpath:*)" \\
+    --allow-tool "shell(dirname:*)" \\
+    --allow-tool "shell(basename:*)" \\
+    --allow-tool "shell(pwd)" \\
+    --allow-tool "shell(grep:*)" \\
+    --allow-tool "shell(rg:*)" \\
+    --allow-tool "shell(ag:*)" \\
+    --allow-tool "shell(awk:*)" \\
+    --allow-tool "shell(sed:*)" \\
+    --allow-tool "shell(sort:*)" \\
+    --allow-tool "shell(uniq:*)" \\
+    --allow-tool "shell(cut:*)" \\
+    --allow-tool "shell(tr:*)" \\
+    --allow-tool "shell(jq:*)" \\
+    --allow-tool "shell(echo:*)" \\
+    --allow-tool "shell(printf:*)" \\
+    --allow-tool "shell(git status:*)" \\
+    --allow-tool "shell(git diff:*)" \\
+    --allow-tool "shell(git log:*)" \\
+    --allow-tool "shell(git show:*)" \\
+    --allow-tool "shell(git blame:*)" \\
+    --allow-tool "shell(git rev-parse:*)" \\
+    --allow-tool "shell(git ls-files:*)" \\
+    --allow-tool "shell(git remote:*)" \\
+    --allow-tool "shell(git fetch:*)" \\
+    --allow-tool "shell(git add:*)" \\
+    --allow-tool "shell(git branch:*)" \\
+    --allow-tool "shell(git switch:*)" \\
+    --allow-tool "shell(git stash:*)" \\
+    --allow-tool "shell(git config:*)" \\
+    --allow-tool "shell(git tag:*)" \\
+    --allow-tool "shell(mkdir:*)" \\
+    --allow-tool "shell(touch:*)" \\
+    --allow-tool "shell(env:*)" \\
+    --allow-tool "shell(printenv:*)" \\
+    --allow-tool "shell(uname:*)" \\
+    --allow-tool "shell(whoami)" \\
+    --allow-tool "shell(date:*)" \\
+    --allow-tool "shell(hostname)" \\
+    --deny-tool "shell(sudo:*)" \\
+    --deny-tool "shell(su:*)" \\
+    --deny-tool "shell(eval:*)" \\
+    --deny-tool "shell(exec:*)" \\
+    --deny-tool "shell(bash:*)" \\
+    --deny-tool "shell(sh:*)" \\
+    --deny-tool "shell(zsh:*)" \\
+    --deny-tool "shell(git push --force:*)" \\
+    --deny-tool "shell(git reset --hard:*)" \\
+    --deny-tool "shell(git clean:*)" \\
+    --deny-tool "shell(kubectl:*)" \\
+    --deny-tool "shell(gcloud:*)" \\
+    --deny-tool "shell(terraform:*)" \\
+    --deny-tool "shell(helm:*)" \\
+    --deny-tool "shell(ssh:*)" \\
+    --deny-tool "shell(scp:*)" \\
+    --deny-tool "shell(rsync:*)"
+}
+FUNCEOF
+    success "Added '$AGENT_NAME' shell function to .zshrc"
     echo ""
-    warn "Close this terminal and open a new one for the alias to take effect."
+    warn "Open a new terminal or run: source ~/.zshrc"
     info "Then type '${BOLD}$AGENT_NAME${NC}' from anywhere to launch your agent."
 fi
 
@@ -1184,8 +1892,11 @@ if [[ -f "$CONFIG_FILE" ]]; then
         python3 - "$CONFIG_FILE" "$WORKSPACE_PATH" << 'PYEOF'
 import json, sys
 config_path, ws_path = sys.argv[1], sys.argv[2]
-with open(config_path) as f:
-    cfg = json.load(f)
+try:
+    with open(config_path) as f:
+        cfg = json.load(f)
+except (json.JSONDecodeError, ValueError):
+    cfg = {}
 tf = cfg.get("trusted_folders", [])
 if ws_path not in tf:
     tf.append(ws_path)
