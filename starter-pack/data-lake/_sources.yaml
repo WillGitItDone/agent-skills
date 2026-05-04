@@ -1,0 +1,22 @@
+# Engrain Data Lake — Source Registry
+#
+# Maps Notion pages to local markdown files.
+# Used by scripts/notion_sync.py to sync content.
+#
+# To add a new page:
+#   1. Copy the Notion page ID from the URL
+#   2. Add an entry below with the target path (relative to data lake root)
+#   3. Run: python scripts/notion_sync.py
+#
+# Notion page IDs are the 32-char hex string at the end of the URL.
+# Example: https://notion.so/engrain-internal/Page-Name-28e3924d726780ffb4dedf9f7fd39c6d
+#          → notion_id: 28e3924d726780ffb4dedf9f7fd39c6d
+
+data_lake_root: knowledge/Engrain Data Lake
+
+sources:
+  - notion_id: 28e3924d726780ffb4dedf9f7fd39c6d
+    path: operations/revenue-cloud-rca-hub.md
+    title: Engrain Revenue Cloud / RCA Operations Hub
+    labels: [operations, revenue, salesforce]
+    owner: Revenue Ops
